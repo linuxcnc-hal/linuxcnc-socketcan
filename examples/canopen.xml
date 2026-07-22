@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<socketcan interface="vcan0"
+           periodUs="1000"
+           syncPeriodUs="10000"
+           sdoTimeoutMs="500">
+  <node name="axis-x"
+        id="1"
+        configPdos="false"
+        startNode="true"
+        heartbeatTimeoutMs="1000">
+    <rpdo number="1"
+          cobId="0x201"
+          transmissionType="1"
+          periodMs="10">
+      <pdoEntry name="controlword"
+                index="0x6040"
+                subIdx="0"
+                bitLen="16"
+                halType="u32"/>
+      <pdoEntry name="target-position"
+                index="0x607A"
+                subIdx="0"
+                bitLen="32"
+                halType="s32"/>
+      <pdoEntry name="mode-command"
+                index="0x6060"
+                subIdx="0"
+                bitLen="8"
+                halType="s32"/>
+    </rpdo>
+
+    <tpdo number="1"
+          cobId="0x181"
+          transmissionType="1">
+      <pdoEntry name="statusword"
+                index="0x6041"
+                subIdx="0"
+                bitLen="16"
+                halType="u32"/>
+      <pdoEntry name="actual-position"
+                index="0x6064"
+                subIdx="0"
+                bitLen="32"
+                halType="s32"/>
+      <pdoEntry name="mode-display"
+                index="0x6061"
+                subIdx="0"
+                bitLen="8"
+                halType="s32"/>
+    </tpdo>
+  </node>
+</socketcan>

@@ -1,4 +1,5 @@
 src/lsc_socketcan
+src/lsc_canopen
 src/*.o
 src/*.d
 *.so

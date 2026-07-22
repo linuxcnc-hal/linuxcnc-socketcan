@@ -3,34 +3,44 @@
 `linuxcnc-socketcan` is a starting point for connecting LinuxCNC HAL to Linux
 SocketCAN devices.
 
-The first component, `lsc_socketcan`, is a non-realtime userspace bridge for
-Classical CAN frames. It opens a SocketCAN RAW socket, publishes received
-frames to HAL pins, and transmits a frame on the rising edge of a HAL trigger
-pin.
+The project contains two non-realtime userspace HAL components:
 
-This is an early project scaffold, not yet a complete CANopen master or a
-hard-realtime motion-control driver.
+- `lsc_socketcan`: a generic Classical CAN frame bridge
+- `lsc_canopen`: an experimental XML-configured CANopen PDO mapper and master
+
+`lsc_canopen` can keep a node's existing PDO mapping or configure a declared
+mapping through expedited SDO downloads before starting the node. It also
+handles NMT, heartbeat monitoring, optional SYNC production, periodic or
+triggered RPDO transmission, and TPDO-to-HAL decoding.
+
+Neither component is a hard-realtime motion-control or functional-safety
+implementation.
 
 ## Project layout
 
 - `src/lsc_socketcan.c`: generic SocketCAN-to-HAL bridge
+- `src/lsc_canopen.c`: XML-configured CANopen component
 - `examples/vcan.hal`: LinuxCNC HAL example using `vcan0`
+- `examples/canopen.xml`: example CiA 402-style PDO mapping
+- `examples/canopen.hal`: CANopen HAL loading example
 - `scripts/setup-vcan.sh`: creates a virtual CAN interface for development
 - `scripts/setup-can.sh`: configures a physical CAN interface
 - `documentation/ARCHITECTURE.md`: design boundaries and suggested roadmap
+- `documentation/CANOPEN.md`: CANopen XML and HAL reference
 
 ## Requirements
 
 - Linux with SocketCAN support
 - LinuxCNC with the userspace development headers and `halcompile`
 - `linuxcnc-uspace-dev` or `linuxcnc-dev`
+- Expat development headers
 - `can-utils` for `candump` and `cansend`
 - A supported CAN adapter, or the kernel `vcan` module for testing
 
 On Debian-based LinuxCNC systems:
 
 ```sh
-sudo apt install linuxcnc-uspace-dev can-utils
+sudo apt install linuxcnc-uspace-dev libexpat1-dev can-utils
 ```
 
 ## Build
@@ -39,7 +49,8 @@ sudo apt install linuxcnc-uspace-dev can-utils
 make
 ```
 
-The local executable is created as `src/lsc_socketcan`.
+The local executables are created as `src/lsc_socketcan` and
+`src/lsc_canopen`.
 
 Install it into the active LinuxCNC environment with:
 
@@ -48,6 +59,35 @@ sudo make install
 ```
 
 Do not use `sudo` for a LinuxCNC Run-In-Place environment.
+
+## CANopen XML mapping
+
+Start with `examples/canopen.xml`. For a virtual bus, keep
+`configPdos="false"` because there is no real node to answer SDO requests:
+
+```sh
+bash scripts/setup-vcan.sh vcan0
+halrun -I
+```
+
+Then load the component from the repository root:
+
+```hal
+loadusr -W lsc_canopen --config examples/canopen.xml
+show pin lsc_canopen
+```
+
+For a real CANopen node, change the interface and set `configPdos="true"`
+only after confirming that every declared object is PDO-mappable and that the
+node supports the selected PDO communication and mapping objects.
+
+The XML mapping is always required because it defines the HAL layout. The
+flag controls whether `lsc_canopen` also writes that mapping into the node:
+
+- `configPdos="false"`: trust the node's existing mapping
+- `configPdos="true"`: configure the declared mapping through SDO
+
+See `documentation/CANOPEN.md` for the complete schema and limitations.
 
 ## Test without hardware
 
@@ -172,8 +212,9 @@ it. Good first additions are:
 2. A frame queue instead of only exposing the latest received frame.
 3. CAN FD support using `struct canfd_frame`.
 4. SocketCAN Broadcast Manager support for cyclic traffic.
-5. A separate CANopen layer for NMT, heartbeat, PDO, SDO, and CiA 402 drives.
-6. Device profiles that map protocol objects to stable LinuxCNC HAL pins.
+5. EDS/DCF/XDD parsing and verification of an existing node mapping.
+6. Segmented and block SDO transfers.
+7. Dedicated CiA 402 state-machine and drive profile helpers.
 
 See `documentation/ARCHITECTURE.md` before implementing a motion-control
 protocol.

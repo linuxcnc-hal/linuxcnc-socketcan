@@ -1,0 +1,2 @@
+loadusr -W lsc_canopen --config examples/canopen.xml
+setp lsc_canopen.axis-x.enable true

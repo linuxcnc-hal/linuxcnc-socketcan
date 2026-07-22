@@ -1,0 +1,2 @@
+loadusr -W lsc_socketcan --interface vcan0 --period-us 1000
+setp lsc_socketcan.enable true

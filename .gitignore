@@ -1,0 +1,7 @@
+src/lsc_socketcan
+src/*.o
+src/*.d
+*.so
+*.ko
+*.tmp
+*~

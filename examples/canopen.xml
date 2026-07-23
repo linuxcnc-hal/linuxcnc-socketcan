@@ -1,52 +1,97 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <socketcan interface="vcan0"
            periodUs="1000"
-           syncPeriodUs="10000"
+           syncPeriodUs="0"
            sdoTimeoutMs="500">
-  <node name="axis-x"
-        id="1"
-        configPdos="false"
+  <!-- canopen.sh lines 2-4:
+       echo "PRE-OP"
+       cansend can0 000#8010
+       The driver sends NMT command 0x80 to node 0x10 before startup SDO setup
+       because this node has configPdos="true" and a custom <sdo>. -->
+  <node name="io-node"
+        id="0x10"
+        configPdos="true"
         startNode="true"
         heartbeatTimeoutMs="1000">
-    <rpdo number="1"
-          cobId="0x201"
-          transmissionType="1"
-          periodMs="10">
-      <pdoEntry name="controlword"
-                index="0x6040"
-                subIdx="0"
-                bitLen="16"
-                halType="u32"/>
-      <pdoEntry name="target-position"
-                index="0x607A"
-                subIdx="0"
-                bitLen="32"
-                halType="s32"/>
-      <pdoEntry name="mode-command"
-                index="0x6060"
-                subIdx="0"
-                bitLen="8"
-                halType="s32"/>
-    </rpdo>
 
+    <!-- canopen.sh line 27:
+         cansend can0 610#2300180100000080
+         configPdos="true" makes the driver disable TPDO1 at 0x1800:01 before
+         writing the mapping. This is generated automatically for this <tpdo>. -->
+
+    <!-- canopen.sh line 7:
+         cansend can0 610#2f001a0000000000
+         For TPDO number="1", the mapping object is 0x1A00. The driver clears
+         0x1A00:00 automatically before writing the <pdoEntry> list. -->
+
+    <!-- canopen.sh lines 31, 35, 39, 43:
+         transmissionType="255" -> cansend can0 610#2f001802ff000000
+         inhibitTime100us="50" -> cansend can0 610#2b00180332000000
+         eventTimerMs="100"    -> cansend can0 610#2b00180564000000
+         cobId="0x190"         -> cansend can0 610#2300180190010000 -->
     <tpdo number="1"
-          cobId="0x181"
-          transmissionType="1">
-      <pdoEntry name="statusword"
-                index="0x6041"
-                subIdx="0"
-                bitLen="16"
-                halType="u32"/>
-      <pdoEntry name="actual-position"
-                index="0x6064"
-                subIdx="0"
-                bitLen="32"
-                halType="s32"/>
-      <pdoEntry name="mode-display"
-                index="0x6061"
-                subIdx="0"
+          cobId="0x190"
+          transmissionType="255"
+          inhibitTime100us="50"
+          eventTimerMs="100">
+      <!-- canopen.sh lines 10-12:
+           #din 6000
+           cansend can0 610#23001a0108010060
+           Maps 0x6000:01 as 8 bits into 0x1A00:01. -->
+      <pdoEntry name="din-1"
+                index="0x6000"
+                subIdx="1"
                 bitLen="8"
-                halType="s32"/>
+                halType="u32"/>
+
+      <!-- canopen.sh line 13:
+           cansend can0 610#23001a0208020060
+           Maps 0x6000:02 as 8 bits into 0x1A00:02. -->
+      <pdoEntry name="din-2"
+                index="0x6000"
+                subIdx="2"
+                bitLen="8"
+                halType="u32"/>
+
+      <!-- canopen.sh lines 15-17:
+           #counter 2600
+           cansend can0 610#23001a0318010026
+           Maps 0x2600:01 as 24 bits into 0x1A00:03. -->
+      <pdoEntry name="counter-1"
+                index="0x2600"
+                subIdx="1"
+                bitLen="24"
+                halType="u32"/>
+
+      <!-- canopen.sh line 18:
+           cansend can0 610#23001a0418020026
+           Maps 0x2600:02 as 24 bits into 0x1A00:04. -->
+      <pdoEntry name="counter-2"
+                index="0x2600"
+                subIdx="2"
+                bitLen="24"
+                halType="u32"/>
     </tpdo>
+
+    <!-- canopen.sh lines 21-22:
+         cansend can0 610#2f001a0004000000
+         After the four <pdoEntry> elements, the driver restores 0x1A00:00 to
+         4 automatically. -->
+
+    <!-- canopen.sh lines 47-48:
+         echo "enable analog inputs sending"
+         cansend can0 610#2f23640001000000
+         This custom expedited SDO writes 1 byte: 0x6423:00 = 1. -->
+    <sdo index="0x6423"
+         subIdx="0"
+         size="1"
+         value="1"/>
+
+    <!-- canopen.sh lines 50-51:
+         echo "OPERATIONAL"
+         cansend can0 000#0110
+         startNode="true" makes the driver send NMT command 0x01 to node 0x10
+         after the PDO and custom SDO configuration completes. -->
+
   </node>
 </socketcan>

@@ -33,6 +33,7 @@
 #define LSC_MAX_NODES 16U
 #define LSC_MAX_PDOS 4U
 #define LSC_MAX_ENTRIES 16U
+#define LSC_MAX_SDO_DOWNLOADS 32U
 #define LSC_NAME_LEN 64U
 #define LSC_PATH_LEN 512U
 #define LSC_XML_BUFFER_SIZE 4096U
@@ -65,10 +66,19 @@ typedef struct {
 } lsc_entry_config_t;
 
 typedef struct {
+    uint16_t index;
+    uint8_t subindex;
+    uint8_t size;
+    uint32_t value;
+} lsc_sdo_download_config_t;
+
+typedef struct {
     bool defined;
     uint8_t number;
     uint16_t cob_id;
     uint8_t transmission_type;
+    uint16_t inhibit_time_100us;
+    bool inhibit_time_set;
     uint16_t event_timer_ms;
     bool event_timer_set;
     uint32_t period_ms;
@@ -84,6 +94,8 @@ typedef struct {
     bool start_node;
     uint16_t heartbeat_producer_ms;
     uint32_t heartbeat_timeout_ms;
+    unsigned int sdo_download_count;
+    lsc_sdo_download_config_t sdo_downloads[LSC_MAX_SDO_DOWNLOADS];
     lsc_pdo_config_t rpdos[LSC_MAX_PDOS];
     lsc_pdo_config_t tpdos[LSC_MAX_PDOS];
 } lsc_node_config_t;
@@ -524,6 +536,18 @@ static void parse_pdo_element(lsc_parser_state_t *state,
         pdo->period_ms = value;
     }
 
+    text = attribute_value(attributes, "inhibitTime100us");
+    if (text != NULL) {
+        if (direction != LSC_PDO_TPDO || parse_unsigned(text, 0U, UINT16_MAX, &value) != 0) {
+            parser_fail(state, "node %s PDO %u has an invalid inhibitTime100us",
+                        state->current_node->name,
+                        pdo->number);
+            return;
+        }
+        pdo->inhibit_time_100us = (uint16_t)value;
+        pdo->inhibit_time_set = true;
+    }
+
     text = attribute_value(attributes, "eventTimerMs");
     if (text != NULL) {
         if (direction != LSC_PDO_TPDO || parse_unsigned(text, 0U, UINT16_MAX, &value) != 0) {
@@ -538,6 +562,71 @@ static void parse_pdo_element(lsc_parser_state_t *state,
 
     state->current_pdo = pdo;
     state->current_direction = direction;
+}
+
+static void parse_sdo_element(lsc_parser_state_t *state, const char **attributes)
+{
+    lsc_sdo_download_config_t *download;
+    const char *text;
+    uint32_t value;
+    uint32_t maximum_value;
+
+    if (state->current_node == NULL || state->current_pdo != NULL) {
+        parser_fail(state, "misplaced sdo element");
+        return;
+    }
+    if (state->current_node->sdo_download_count >= LSC_MAX_SDO_DOWNLOADS) {
+        parser_fail(state, "node %s has too many sdo elements; maximum is %u",
+                    state->current_node->name,
+                    LSC_MAX_SDO_DOWNLOADS);
+        return;
+    }
+
+    download = &state->current_node->sdo_downloads[state->current_node->sdo_download_count];
+    memset(download, 0, sizeof(*download));
+
+    text = attribute_value(attributes, "index");
+    if (text == NULL || parse_unsigned(text, 0U, UINT16_MAX, &value) != 0) {
+        parser_fail(state, "node %s has an sdo with an invalid or missing index",
+                    state->current_node->name);
+        return;
+    }
+    download->index = (uint16_t)value;
+
+    text = attribute_value(attributes, "subIdx");
+    if (text == NULL || parse_unsigned(text, 0U, UINT8_MAX, &value) != 0) {
+        parser_fail(state, "node %s has an sdo with an invalid or missing subIdx",
+                    state->current_node->name);
+        return;
+    }
+    download->subindex = (uint8_t)value;
+
+    text = attribute_value(attributes, "size");
+    if (text == NULL || parse_unsigned(text, 1U, 4U, &value) != 0 ||
+        (value != 1U && value != 2U && value != 4U)) {
+        parser_fail(state, "node %s has an sdo with an invalid or missing size",
+                    state->current_node->name);
+        return;
+    }
+    download->size = (uint8_t)value;
+
+    if (download->size == 1U) {
+        maximum_value = UINT8_MAX;
+    } else if (download->size == 2U) {
+        maximum_value = UINT16_MAX;
+    } else {
+        maximum_value = UINT32_MAX;
+    }
+
+    text = attribute_value(attributes, "value");
+    if (text == NULL || parse_unsigned(text, 0U, maximum_value, &value) != 0) {
+        parser_fail(state, "node %s has an sdo with an invalid or missing value",
+                    state->current_node->name);
+        return;
+    }
+    download->value = value;
+
+    state->current_node->sdo_download_count += 1U;
 }
 
 static void parse_entry_element(lsc_parser_state_t *state, const char **attributes)
@@ -677,6 +766,8 @@ static void XMLCALL start_element(void *user_data, const char *name, const char 
         parse_pdo_element(state, LSC_PDO_RPDO, attributes);
     } else if (strcmp(name, "tpdo") == 0) {
         parse_pdo_element(state, LSC_PDO_TPDO, attributes);
+    } else if (strcmp(name, "sdo") == 0) {
+        parse_sdo_element(state, attributes);
     } else if (strcmp(name, "pdoEntry") == 0) {
         parse_entry_element(state, attributes);
     } else {
@@ -1327,6 +1418,18 @@ static int configure_pdo(int socket_fd,
         return -1;
     }
 
+    if (direction == LSC_PDO_TPDO && pdo->inhibit_time_set &&
+        sdo_download(socket_fd,
+                     node_id,
+                     communication_index,
+                     3U,
+                     pdo->inhibit_time_100us,
+                     2U,
+                     timeout_ms,
+                     abort_code) != 0) {
+        return -1;
+    }
+
     if (direction == LSC_PDO_TPDO && pdo->event_timer_set &&
         sdo_download(socket_fd,
                      node_id,
@@ -1355,12 +1458,16 @@ static int configure_node(int socket_fd,
                           lsc_node_hal_t *node_hal)
 {
     unsigned int pdo_index;
+    unsigned int download_index;
+    bool needs_sdo_setup = node->config_pdos ||
+                           node->heartbeat_producer_ms > 0U ||
+                           node->sdo_download_count > 0U;
     uint32_t abort_code = 0U;
 
     *node_hal->config_ok = 0;
     *node_hal->sdo_abort = 0U;
 
-    if (node->config_pdos) {
+    if (needs_sdo_setup) {
         if (send_nmt(socket_fd, 0x80U, node->node_id, config->sdo_timeout_ms) != 0) {
             return -1;
         }
@@ -1379,24 +1486,44 @@ static int configure_node(int socket_fd,
             return -1;
         }
 
-        for (pdo_index = 0U; pdo_index < LSC_MAX_PDOS; ++pdo_index) {
-            if (node->rpdos[pdo_index].defined &&
-                configure_pdo(socket_fd,
-                              node->node_id,
-                              LSC_PDO_RPDO,
-                              &node->rpdos[pdo_index],
-                              config->sdo_timeout_ms,
-                              &abort_code) != 0) {
-                *node_hal->sdo_abort = abort_code;
-                return -1;
+        if (node->config_pdos) {
+            for (pdo_index = 0U; pdo_index < LSC_MAX_PDOS; ++pdo_index) {
+                if (node->rpdos[pdo_index].defined &&
+                    configure_pdo(socket_fd,
+                                  node->node_id,
+                                  LSC_PDO_RPDO,
+                                  &node->rpdos[pdo_index],
+                                  config->sdo_timeout_ms,
+                                  &abort_code) != 0) {
+                    *node_hal->sdo_abort = abort_code;
+                    return -1;
+                }
+                if (node->tpdos[pdo_index].defined &&
+                    configure_pdo(socket_fd,
+                                  node->node_id,
+                                  LSC_PDO_TPDO,
+                                  &node->tpdos[pdo_index],
+                                  config->sdo_timeout_ms,
+                                  &abort_code) != 0) {
+                    *node_hal->sdo_abort = abort_code;
+                    return -1;
+                }
             }
-            if (node->tpdos[pdo_index].defined &&
-                configure_pdo(socket_fd,
-                              node->node_id,
-                              LSC_PDO_TPDO,
-                              &node->tpdos[pdo_index],
-                              config->sdo_timeout_ms,
-                              &abort_code) != 0) {
+        }
+
+        for (download_index = 0U;
+             download_index < node->sdo_download_count;
+             ++download_index) {
+            const lsc_sdo_download_config_t *download = &node->sdo_downloads[download_index];
+
+            if (sdo_download(socket_fd,
+                             node->node_id,
+                             download->index,
+                             download->subindex,
+                             download->value,
+                             download->size,
+                             config->sdo_timeout_ms,
+                             &abort_code) != 0) {
                 *node_hal->sdo_abort = abort_code;
                 return -1;
             }

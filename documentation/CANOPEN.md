@@ -32,15 +32,17 @@ XML. The component currently does not read back and verify the existing map.
 With `configPdos="true"`, the component performs this sequence on every
 connection:
 
-1. Send NMT Pre-operational.
+1. Send NMT Pre-operational when any startup SDO setup is required.
 2. Optionally configure heartbeat producer object `0x1017`.
 3. Disable each configured PDO through communication subindex 1.
 4. Set mapping subindex 0 to zero.
 5. Write every mapping entry.
 6. Restore the mapping-entry count.
-7. Configure transmission type and optional TPDO event timer.
+7. Configure transmission type, optional TPDO inhibit time, and optional TPDO
+   event timer.
 8. Re-enable the PDO with the configured COB-ID.
-9. Send NMT Start when `startNode="true"`.
+9. Write any node-level custom `<sdo>` downloads.
+10. Send NMT Start when `startNode="true"`.
 
 Only expedited SDO downloads of one, two, or four bytes are required by this
 sequence and are implemented.
@@ -72,6 +74,7 @@ SYNC uses the standard CAN-ID `0x080`.
       startNode="true"
       heartbeatProducerMs="100"
       heartbeatTimeoutMs="500">
+  <sdo index="0x6423" subIdx="0" size="1" value="1"/>
   ...
 </node>
 ```
@@ -85,6 +88,9 @@ SYNC uses the standard CAN-ID `0x080`.
   zero disables heartbeat supervision
 
 The component supports up to 16 nodes.
+
+Node-level `<sdo>` elements are optional expedited SDO downloads written after
+PDO configuration and before NMT Start. `size` must be `1`, `2`, or `4` bytes.
 
 ## RPDO Element
 
@@ -112,6 +118,7 @@ when `periodMs` is zero.
 <tpdo number="1"
       cobId="0x181"
       transmissionType="1"
+      inhibitTime100us="50"
       eventTimerMs="100">
   ...
 </tpdo>
@@ -120,6 +127,7 @@ when `periodMs` is zero.
 - `number`: TPDO number 1 through 4
 - `cobId`: optional 11-bit COB-ID
 - `transmissionType`: CANopen transmission type, default 255
+- `inhibitTime100us`: optional TPDO communication parameter subindex 3
 - `eventTimerMs`: optional TPDO communication parameter subindex 5
 
 ## PDO Entries

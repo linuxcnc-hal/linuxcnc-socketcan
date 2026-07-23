@@ -127,8 +127,27 @@ when `periodMs` is zero.
 - `number`: TPDO number 1 through 4
 - `cobId`: optional 11-bit COB-ID
 - `transmissionType`: CANopen transmission type, default 255
-- `inhibitTime100us`: optional TPDO communication parameter subindex 3
-- `eventTimerMs`: optional TPDO communication parameter subindex 5
+- `inhibitTime100us`: optional TPDO communication parameter subindex 3.
+  The unit is 100 microseconds. For example, `50` means 5 ms. This limits
+  how frequently the node may transmit this TPDO, which is useful for
+  event-driven/COV TPDOs that could otherwise send too often when inputs
+  change quickly.
+- `eventTimerMs`: optional TPDO communication parameter subindex 5. The unit is
+  milliseconds. For event-driven/asynchronous TPDOs, many nodes use this as a
+  periodic refresh timer even if no value changes.
+
+For example:
+
+```xml
+<tpdo number="1"
+      transmissionType="255"
+      inhibitTime100us="50"
+      eventTimerMs="100">
+```
+
+means the node may send TPDO1 on change of value, but no faster than every
+5 ms, and commonly sends a refresh at least every 100 ms. Exact behavior still
+depends on the device's CANopen object dictionary and firmware.
 
 ## PDO Entries
 

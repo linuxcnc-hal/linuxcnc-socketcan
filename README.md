@@ -110,10 +110,27 @@ This wakes the driver every 1 ms, sends no SYNC frames, and waits up to 500 ms
 for each SDO response during startup configuration.
 
 PDO timing depends on the PDO configuration. A TPDO with
-`transmissionType="255"` is asynchronous/event-driven on many devices; it is
+`transmissionType="255"` is asynchronous/event-driven, also called COV on some
+devices. With `syncPeriodUs="0"`, no SYNC frames are sent, so that TPDO is
 normally sent by the device on change of value or by its `eventTimerMs`, not by
-`periodUs` or SYNC. A synchronous PDO, such as `transmissionType="1"`, may act
-on each SYNC frame if `syncPeriodUs` is nonzero.
+`periodUs` or SYNC. `inhibitTime100us` limits how frequently the device may send
+that TPDO.
+
+For example:
+
+```xml
+<tpdo number="1"
+      transmissionType="255"
+      inhibitTime100us="50"
+      eventTimerMs="100">
+```
+
+means an asynchronous/COV TPDO that can send on value changes, no faster than
+every 5 ms, with a typical 100 ms event-timer refresh. In other words,
+`eventTimerMs="100"` writes TPDO communication subindex 5 and many devices use
+it to resend the TPDO about every 100 ms even when the value has not changed.
+A synchronous PDO, such as `transmissionType="1"`, may act on each SYNC frame
+if `syncPeriodUs` is nonzero.
 
 See `documentation/CANOPEN.md` for the complete schema and limitations.
 

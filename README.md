@@ -87,6 +87,34 @@ flag controls whether `lsc_canopen` also writes that mapping into the node:
 - `configPdos="false"`: trust the node's existing mapping
 - `configPdos="true"`: configure the declared mapping through SDO
 
+### CANopen timing in the XML
+
+`periodUs` and `syncPeriodUs` are different clocks:
+
+- `periodUs`: how often the `lsc_canopen` userspace loop wakes up to read CAN
+  frames, update HAL pins, process RPDO sends, and check timeouts. It does not
+  force a CANopen device to send PDOs.
+- `syncPeriodUs`: how often `lsc_canopen` sends CANopen SYNC frames on CAN-ID
+  `0x080`. Use `0` to disable SYNC production.
+
+For example:
+
+```xml
+<socketcan interface="can0"
+           periodUs="1000"
+           syncPeriodUs="0"
+           sdoTimeoutMs="500">
+```
+
+This wakes the driver every 1 ms, sends no SYNC frames, and waits up to 500 ms
+for each SDO response during startup configuration.
+
+PDO timing depends on the PDO configuration. A TPDO with
+`transmissionType="255"` is asynchronous/event-driven on many devices; it is
+normally sent by the device on change of value or by its `eventTimerMs`, not by
+`periodUs` or SYNC. A synchronous PDO, such as `transmissionType="1"`, may act
+on each SYNC frame if `syncPeriodUs` is nonzero.
+
 See `documentation/CANOPEN.md` for the complete schema and limitations.
 
 ## Test without hardware

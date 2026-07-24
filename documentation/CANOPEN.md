@@ -59,8 +59,16 @@ sequence and are implemented.
 ```
 
 - `interface`: SocketCAN network interface
-- `periodUs`: userspace polling period, 100 through 1000000 microseconds
-- `syncPeriodUs`: SYNC producer period; zero disables SYNC production
+- `periodUs`: userspace polling period, values can be from 100 to 1000000 microseconds.
+example: periodUs = "1000": lsc_canopen checks the CAN socket every 1 ms. It does not mean “send PDO every 1 ms”.
+- `syncPeriodUs`: SYNC producer period; zero disables SYNC production.
+it is specifically a parameter related to the transmissionType. If the transmissionType = "1", the syncPeriodUs will be important 
+to not be 0. \
+example:\
+transmissionType="1"\
+syncPeriodUs="10000"\
+Then lsc_canopen sends SYNC every 10 ms, and the device may send/consume the PDO on each SYNC.\
+For a transmissionType="255", since it is asynchronous/event-driven/COV on many devices, the syncPeriodUs could be 0.
 - `sdoTimeoutMs`: timeout for each SDO request
 
 SYNC uses the standard CAN-ID `0x080`.
@@ -96,7 +104,7 @@ PDO configuration and before NMT Start. `size` must be `1`, `2`, or `4` bytes.
 
 ```xml
 <rpdo number="1"
-      cobId="0x201"
+      cobId="0x210"
       transmissionType="1"
       periodMs="10">
   ...
@@ -104,8 +112,11 @@ PDO configuration and before NMT Start. `size` must be `1`, `2`, or `4` bytes.
 ```
 
 - `number`: RPDO number 1 through 4
-- `cobId`: optional 11-bit COB-ID; the predefined connection-set value is the
-  default
+- `cobId`: Communication Object Identifier, optional 11-bit COB-ID; the predefined connection-set value is the
+  default.
+  $$\text{COB-ID} = \text{Base Address of the functionality} + \text{Node-ID}$$
+here, we consider the node-id is 0x10, and the functionality is receive pdo (0x200 for the txpdo1, 0x300 for txp2, etc).
+So: 0x200 + 0x10 = 0x210
 - `transmissionType`: CANopen transmission type, default 255
 - `periodMs`: automatic RPDO transmit period; zero disables periodic sending
 
@@ -116,7 +127,7 @@ when `periodMs` is zero.
 
 ```xml
 <tpdo number="1"
-      cobId="0x181"
+      cobId="0x190"
       transmissionType="1"
       inhibitTime100us="50"
       eventTimerMs="100">
@@ -125,7 +136,10 @@ when `periodMs` is zero.
 ```
 
 - `number`: TPDO number 1 through 4
-- `cobId`: optional 11-bit COB-ID
+- `cobId`: Communication Object Identifier, optional 11-bit COB-ID 
+$$\text{COB-ID} = \text{Base Address of the functionality} + \text{Node-ID}$$
+here, we consider the node-id is 0x10, and the functionality is transmit pdo (0x180 for the txpdo1, 0x280 for txp2, etc).
+So: 0x180 + 0x10 = 0x190
 - `transmissionType`: CANopen transmission type, default 255
 - `inhibitTime100us`: optional TPDO communication parameter subindex 3.
   The unit is 100 microseconds. For example, `50` means 5 ms. This limits
@@ -135,6 +149,7 @@ when `periodMs` is zero.
 - `eventTimerMs`: optional TPDO communication parameter subindex 5. The unit is
   milliseconds. For event-driven/asynchronous TPDOs, many nodes use this as a
   periodic refresh timer even if no value changes.
+  if you want to disable it, use 0.
 
 For example:
 
@@ -144,10 +159,12 @@ For example:
       inhibitTime100us="50"
       eventTimerMs="100">
 ```
+the device sends TPDOs when:
+- the value changes, because 255 is asynchronous/event-driven/COV on many devices
+- or every 100 ms, because eventTimerMs="100"
+- but not more often than 5 ms, because inhibitTime100us="50" = 50 * 100 us
 
-means the node may send TPDO1 on change of value, but no faster than every
-5 ms, and commonly sends a refresh at least every 100 ms. Exact behavior still
-depends on the device's CANopen object dictionary and firmware.
+
 
 ## PDO Entries
 

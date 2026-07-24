@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- this example file:
+The transmission type 255 (change of value of COV) is used. So the syncPeriodUs could be 0.
+Transmission in 3 cases:
+- the value changes, because 255 is asynchronous/event-driven/COV on many devices
+- or every 100 ms, because eventTimerMs="100"
+- but not more often than 5 ms, because inhibitTime100us="50" = 50 * 100 us
+ -->
+<socketcan interface="vcan0"
+           periodUs="1000"
+           syncPeriodUs="0"
+           sdoTimeoutMs="500">
+  
+  <node name="io-node"
+        id="0x10"
+        configPdos="true"
+        startNode="true"
+        heartbeatProducerMs="1000"
+        heartbeatTimeoutMs="1000">
+    
+    <tpdo number="1"
+          cobId="0x190"
+          transmissionType="255"
+          inhibitTime100us="50"
+          eventTimerMs="100">
+            <!--txpdo entries go here-->
+    </tpdo>
+
+    <rpdo number="1"
+        cobId="0x210"
+        transmissionType="1"
+        periodMs="100">
+            <!--rxpdo entries go here-->
+    </rpdo>
+  </node>
+</socketcan>

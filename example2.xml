@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- this example file:
+The heartbit of 1000ms is used with a heartbeatTimeoutMs of 1000ms.
+ -->
+<socketcan interface="vcan0"
+           periodUs="1000"
+           syncPeriodUs="0"
+           sdoTimeoutMs="500">
+  
+  <node name="io-node"
+        id="0x10"
+        configPdos="true"
+        startNode="true"
+        heartbeatProducerMs="1000"
+        heartbeatTimeoutMs="1000">
+    
+    <tpdo number="1"
+          cobId="0x190"
+          transmissionType="1"
+          inhibitTime100us="50"
+          eventTimerMs="100">
+            <!--txpdo entries go here-->
+    </tpdo>
+
+    <rpdo number="1"
+        cobId="0x210"
+        transmissionType="1"
+        periodMs="100">
+            <!--rxpdo entries go here-->
+    </rpdo>
+  </node>
+</socketcan>

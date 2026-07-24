@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- this example file:
+the transimission type is set to 1, with the eventTimerMs set to 100ms, and the inhibitTime100us set to 50 (5ms). 
+This means that the PDO will be transmitted every 100ms, but if a new value is received within 5ms of the last transmission.
+The node-id is 0x10. 
+So the cobId for the TPDO is 0x180 + node-id = 0x190, and the cobId for the RPDO is 0x200 + node-id = 0x210.
+
+what is the issue here?
+Since the transmission type is set to 1, 
+it looks to the syncPeriodUs to determine when to transmit the PDO.
+Since the syncPeriodUs is set to 0, so even the eventTimerMs is ineffective.
+ -->
+<socketcan interface="vcan0"
+           periodUs="1000"
+           syncPeriodUs="0"
+           sdoTimeoutMs="500">
+  
+  <node name="io-node"
+        id="0x10"
+        configPdos="true"
+        startNode="true">
+    
+    <tpdo number="1"
+          cobId="0x190"
+          transmissionType="1"
+          inhibitTime100us="50"
+          eventTimerMs="100">
+            <!--txpdo entries go here-->
+    </tpdo>
+
+    <rpdo number="1"
+        cobId="0x210"
+        transmissionType="1"
+        periodMs="100">
+            <!--rxpdo entries go here-->
+    </rpdo>
+  </node>
+</socketcan>

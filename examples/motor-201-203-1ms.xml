@@ -25,11 +25,17 @@ the index, subindex, and node id are ineffective, and the driver will not send t
         configPdos="false"
         startNode="false"
         heartbeatTimeoutMs="0">
+
+    <!-- since the autoStart is false, the driver will not automatically start the node 
+    after setting setp lsc_canopen.motor.rpdo-1.send true, it start to transmit
+    the rpdo-1 message every 1ms, and the node will respond with the tpdo-1 message every 1ms. -->
     <rpdo number="1"
           cobId="0x201"
           transmissionType="255"
           periodMs="1"
           autoStart="false">
+       
+       
        <!-- read only the first 4 bytes for motor1 position--> 
       <pdoEntry name="target-position"
                 index="0x2000"

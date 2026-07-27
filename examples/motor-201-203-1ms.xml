@@ -16,7 +16,7 @@ startNode="false"
 
 the index, subindex, and node id are ineffective, and the driver will not send the NMT start command to the node. The node must be started by some other means, for example by a separate script or by a different CANopen master.
 -->
-<socketcan interface="vcan0"
+<socketcan interface="can0"
            periodUs="1000"
            syncPeriodUs="0"
            sdoTimeoutMs="500">
@@ -34,7 +34,7 @@ the index, subindex, and node id are ineffective, and the driver will not send t
                 subIdx="0"
                 bitLen="32"
                 halType="s32"/>
-      <pdoEntry name="data-4-7"
+      <pdoEntry name="dummy-data-4-7"
                 index="0x2001"
                 subIdx="0"
                 bitLen="32"
@@ -45,12 +45,12 @@ the index, subindex, and node id are ineffective, and the driver will not send t
           cobId="0x203"
           transmissionType="255"
           periodMs="1">
-      <pdoEntry name="request-data-0-3"
+      <pdoEntry name="dummy-data-0-3"
                 index="0x2010"
                 subIdx="0"
                 bitLen="32"
                 halType="u32"/>
-      <pdoEntry name="request-data-4-7"
+      <pdoEntry name="request-enable"
                 index="0x2011"
                 subIdx="0"
                 bitLen="32"
@@ -60,21 +60,29 @@ the index, subindex, and node id are ineffective, and the driver will not send t
     <tpdo number="1"
           cobId="0x281"
           transmissionType="255">
+      <!--first 4 bytes are the position-->
       <pdoEntry name="actual-position"
                 index="0x2100"
                 subIdx="0"
                 bitLen="32"
                 halType="s32"/>
+      <!--byte 5 is the current-->
       <pdoEntry name="actual-current"
                 index="0x2101"
                 subIdx="0"
                 bitLen="8"
                 halType="s32"/>
-      <pdoEntry name="status-flags"
-                index="0x2102"
-                subIdx="0"
-                bitLen="16"
-                halType="u32"/>
+      <!-- bytes 6-7 are status flags-->
+      <pdoEntry name="enable"    index="0x2102" subIdx="0" bitLen="1" halType="bit"/>
+      <pdoEntry name="fault"     index="0x2102" subIdx="1" bitLen="1" halType="bit"/>
+      <pdoEntry name="emergency" index="0x2102" subIdx="2" bitLen="1" halType="bit"/>
+      <pdoEntry name="home"      index="0x2102" subIdx="3" bitLen="1" halType="bit"/>
+      <pdoEntry name="lim-cw"    index="0x2102" subIdx="4" bitLen="1" halType="bit"/>
+      <pdoEntry name="lim-ccw"   index="0x2102" subIdx="5" bitLen="1" halType="bit"/>
+      <pdoEntry name="homing"    index="0x2102" subIdx="6" bitLen="1" halType="bit"/>
+      <pdoEntry name="homed"     index="0x2102" subIdx="7" bitLen="1" halType="bit"/>
+      <pdoEntry name="brake"     index="0x2102" subIdx="8" bitLen="1" halType="bit"/>
+      <pdoEntry name="out-dig"   index="0x2102" subIdx="9" bitLen="1" halType="bit"/>
     </tpdo>
   </node>
 </socketcan>

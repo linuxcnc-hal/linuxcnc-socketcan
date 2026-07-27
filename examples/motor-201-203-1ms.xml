@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+in this example by sending:
+cansend can0 203#0000000001000000
+ we get the position.
+
+the first 4 bytes of the 0x281 message are the position, the next byte is the current, and the last 2 bytes are status flags.
+
+the first 4 bytes of the 0x201 message are the requested position.
+forexample for the pos 1000, we have to send: (1000 = 0x03e8)
+cansend can0 201#03e8000001000000
+
+since the: 
+configPdos="false"
+startNode="false"
+
+the index, subindex, and node id are ineffective, and the driver will not send the NMT start command to the node. The node must be started by some other means, for example by a separate script or by a different CANopen master.
+-->
+<socketcan interface="vcan0"
+           periodUs="1000"
+           syncPeriodUs="0"
+           sdoTimeoutMs="500">
+  <node name="motor"
+        id="3"
+        configPdos="false"
+        startNode="false"
+        heartbeatTimeoutMs="0">
+    <rpdo number="1"
+          cobId="0x201"
+          transmissionType="255"
+          periodMs="1">
+      <pdoEntry name="target-position"
+                index="0x2000"
+                subIdx="0"
+                bitLen="32"
+                halType="s32"/>
+      <pdoEntry name="data-4-7"
+                index="0x2001"
+                subIdx="0"
+                bitLen="32"
+                halType="u32"/>
+    </rpdo>
+
+    <rpdo number="2"
+          cobId="0x203"
+          transmissionType="255"
+          periodMs="1">
+      <pdoEntry name="request-data-0-3"
+                index="0x2010"
+                subIdx="0"
+                bitLen="32"
+                halType="u32"/>
+      <pdoEntry name="request-data-4-7"
+                index="0x2011"
+                subIdx="0"
+                bitLen="32"
+                halType="u32"/>
+    </rpdo>
+
+    <tpdo number="1"
+          cobId="0x281"
+          transmissionType="255">
+      <pdoEntry name="actual-position"
+                index="0x2100"
+                subIdx="0"
+                bitLen="32"
+                halType="s32"/>
+      <pdoEntry name="actual-current"
+                index="0x2101"
+                subIdx="0"
+                bitLen="8"
+                halType="s32"/>
+      <pdoEntry name="status-flags"
+                index="0x2102"
+                subIdx="0"
+                bitLen="16"
+                halType="u32"/>
+    </tpdo>
+  </node>
+</socketcan>

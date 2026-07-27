@@ -73,16 +73,21 @@ the index, subindex, and node id are ineffective, and the driver will not send t
                 bitLen="8"
                 halType="s32"/>
       <!-- bytes 6-7 are status flags-->
-      <pdoEntry name="enable"    index="0x2102" subIdx="0" bitLen="1" halType="bit"/>
-      <pdoEntry name="fault"     index="0x2102" subIdx="1" bitLen="1" halType="bit"/>
-      <pdoEntry name="emergency" index="0x2102" subIdx="2" bitLen="1" halType="bit"/>
-      <pdoEntry name="home"      index="0x2102" subIdx="3" bitLen="1" halType="bit"/>
-      <pdoEntry name="lim-cw"    index="0x2102" subIdx="4" bitLen="1" halType="bit"/>
-      <pdoEntry name="lim-ccw"   index="0x2102" subIdx="5" bitLen="1" halType="bit"/>
-      <pdoEntry name="homing"    index="0x2102" subIdx="6" bitLen="1" halType="bit"/>
-      <pdoEntry name="homed"     index="0x2102" subIdx="7" bitLen="1" halType="bit"/>
-      <pdoEntry name="brake"     index="0x2102" subIdx="8" bitLen="1" halType="bit"/>
-      <pdoEntry name="out-dig"   index="0x2102" subIdx="9" bitLen="1" halType="bit"/>
+      <complexEntry name="status-flags"
+                    index="0x2102"
+                    subIdx="0"
+                    bitLen="16"
+                    halType="u32"
+                    bit0="enable"
+                    bit1="fault"
+                    bit2="emergency"
+                    bit3="home"
+                    bit4="lim-cw"
+                    bit5="lim-ccw"
+                    bit6="homing"
+                    bit7="homed"
+                    bit8="brake"
+                    bit9="out-dig"/>
     </tpdo>
   </node>
 </socketcan>

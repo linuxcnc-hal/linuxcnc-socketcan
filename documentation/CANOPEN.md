@@ -197,7 +197,34 @@ RPDO float encoding applies the inverse operation.
 
 Entries are packed consecutively in XML order. The component supports
 non-byte-aligned fields and uses CANopen little-endian bit ordering. A PDO may
-contain at most 64 bits and 16 entries.
+contain at most 64 bits and 32 exported entries.
+
+`complexEntry` can be used as a skip/pass-through field when only `bitLen` is
+provided:
+
+```xml
+<complexEntry bitLen="16"/>
+```
+
+That consumes 16 payload bits and exports no HAL pin.
+
+When named, `complexEntry` behaves like a normal numeric field and can also
+export overlay bit pins from the same payload bits:
+
+```xml
+<complexEntry name="status-flags"
+              index="0x2102"
+              subIdx="0"
+              bitLen="16"
+              halType="u32"
+              bit0="enable"
+              bit1="fault"
+              bit2="emergency"/>
+```
+
+This exports `status-flags` as a `u32` pin and also exports the named `bit`
+pins. The generated bit pins do not increase the PDO payload length and are not
+written as additional PDO mapping objects when `configPdos="true"`.
 
 ## HAL Pins
 

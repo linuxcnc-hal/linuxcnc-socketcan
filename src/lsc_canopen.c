@@ -32,7 +32,7 @@
 #define LSC_RECONNECT_DELAY_MS 1000U
 #define LSC_MAX_NODES 16U
 #define LSC_MAX_PDOS 4U
-#define LSC_MAX_ENTRIES 16U
+#define LSC_MAX_ENTRIES 32U
 #define LSC_MAX_SDO_DOWNLOADS 32U
 #define LSC_NAME_LEN 64U
 #define LSC_PATH_LEN 512U
@@ -60,6 +60,8 @@ typedef struct {
     uint8_t bit_length;
     uint8_t bit_offset;
     lsc_hal_type_t hal_type;
+    bool no_pin;
+    bool overlay;
     bool raw_signed;
     double scale;
     double offset;
@@ -629,13 +631,43 @@ static void parse_sdo_element(lsc_parser_state_t *state, const char **attributes
     state->current_node->sdo_download_count += 1U;
 }
 
-static void parse_entry_element(lsc_parser_state_t *state, const char **attributes)
+static unsigned int current_pdo_bit_length(const lsc_pdo_config_t *pdo)
+{
+    unsigned int bit_length = 0U;
+    unsigned int index;
+
+    for (index = 0U; index < pdo->entry_count; ++index) {
+        const lsc_entry_config_t *entry = &pdo->entries[index];
+        if (!entry->overlay) {
+            bit_length += entry->bit_length;
+        }
+    }
+
+    return bit_length;
+}
+
+static int duplicate_entry_name(const lsc_pdo_config_t *pdo, const char *name)
+{
+    unsigned int index;
+
+    for (index = 0U; index < pdo->entry_count; ++index) {
+        const lsc_entry_config_t *entry = &pdo->entries[index];
+        if (!entry->no_pin && strcmp(entry->name, name) == 0) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+static void parse_entry_common(lsc_parser_state_t *state,
+                               const char **attributes,
+                               bool allow_nameless)
 {
     lsc_entry_config_t *entry;
     const char *text;
     uint32_t value;
-    unsigned int bit_offset = 0U;
-    unsigned int index;
+    unsigned int bit_offset;
 
     if (state->current_pdo == NULL || state->current_node == NULL) {
         parser_fail(state, "misplaced pdoEntry element");
@@ -649,42 +681,44 @@ static void parse_entry_element(lsc_parser_state_t *state, const char **attribut
         return;
     }
 
-    for (index = 0U; index < state->current_pdo->entry_count; ++index) {
-        bit_offset += state->current_pdo->entries[index].bit_length;
-    }
+    bit_offset = current_pdo_bit_length(state->current_pdo);
 
     entry = &state->current_pdo->entries[state->current_pdo->entry_count];
     memset(entry, 0, sizeof(*entry));
     entry->scale = 1.0;
 
     text = attribute_value(attributes, "name");
-    if (text == NULL || copy_text(entry->name, sizeof(entry->name), text) != 0 ||
-        !valid_hal_segment(entry->name)) {
+    if (text == NULL && allow_nameless) {
+        entry->no_pin = true;
+    } else if (text == NULL || copy_text(entry->name, sizeof(entry->name), text) != 0 ||
+               !valid_hal_segment(entry->name)) {
         parser_fail(state, "node %s PDO %u has an invalid or missing entry name",
                     state->current_node->name,
                     state->current_pdo->number);
         return;
     }
 
-    for (index = 0U; index < state->current_pdo->entry_count; ++index) {
-        if (strcmp(state->current_pdo->entries[index].name, entry->name) == 0) {
-            parser_fail(state, "node %s PDO %u has duplicate entry name %s",
-                        state->current_node->name,
-                        state->current_pdo->number,
-                        entry->name);
-            return;
-        }
+    if (!entry->no_pin && duplicate_entry_name(state->current_pdo, entry->name)) {
+        parser_fail(state, "node %s PDO %u has duplicate entry name %s",
+                    state->current_node->name,
+                    state->current_pdo->number,
+                    entry->name);
+        return;
     }
 
     text = attribute_value(attributes, "index");
-    if (text == NULL || parse_unsigned(text, 0U, UINT16_MAX, &value) != 0) {
+    if (text == NULL && entry->no_pin) {
+        value = 0U;
+    } else if (text == NULL || parse_unsigned(text, 0U, UINT16_MAX, &value) != 0) {
         parser_fail(state, "entry %s has an invalid or missing index", entry->name);
         return;
     }
     entry->index = (uint16_t)value;
 
     text = attribute_value(attributes, "subIdx");
-    if (text == NULL || parse_unsigned(text, 0U, UINT8_MAX, &value) != 0) {
+    if (text == NULL && entry->no_pin) {
+        value = 0U;
+    } else if (text == NULL || parse_unsigned(text, 0U, UINT8_MAX, &value) != 0) {
         parser_fail(state, "entry %s has an invalid or missing subIdx", entry->name);
         return;
     }
@@ -706,7 +740,9 @@ static void parse_entry_element(lsc_parser_state_t *state, const char **attribut
 
     entry->hal_type = entry->bit_length == 1U ? LSC_HAL_BIT : LSC_HAL_U32;
     text = attribute_value(attributes, "halType");
-    if (text != NULL && parse_hal_type(text, &entry->hal_type) != 0) {
+    if (text == NULL && entry->no_pin) {
+        entry->hal_type = LSC_HAL_U32;
+    } else if (text != NULL && parse_hal_type(text, &entry->hal_type) != 0) {
         parser_fail(state, "entry %s has an invalid halType", entry->name);
         return;
     }
@@ -750,6 +786,83 @@ static void parse_entry_element(lsc_parser_state_t *state, const char **attribut
         (uint8_t)((bit_offset + entry->bit_length + 7U) / 8U);
 }
 
+static void parse_entry_element(lsc_parser_state_t *state, const char **attributes)
+{
+    parse_entry_common(state, attributes, false);
+}
+
+static void parse_complex_entry_element(lsc_parser_state_t *state, const char **attributes)
+{
+    lsc_entry_config_t *base_entry;
+    unsigned int base_index;
+    unsigned int bit_index;
+
+    base_index = state->current_pdo != NULL ? state->current_pdo->entry_count : 0U;
+    parse_entry_common(state, attributes, true);
+    if (state->failed) {
+        return;
+    }
+
+    base_entry = &state->current_pdo->entries[base_index];
+    if (base_entry->no_pin) {
+        return;
+    }
+    if (base_entry->bit_length > 16U) {
+        parser_fail(state, "complexEntry %s supports at most 16 named bits", base_entry->name);
+        return;
+    }
+
+    for (bit_index = 0U; bit_index < base_entry->bit_length; ++bit_index) {
+        char attribute_name[8];
+        const char *bit_name;
+        lsc_entry_config_t *bit_entry;
+
+        snprintf(attribute_name, sizeof(attribute_name), "bit%u", bit_index);
+        bit_name = attribute_value(attributes, attribute_name);
+        if (bit_name == NULL || bit_name[0] == '\0') {
+            continue;
+        }
+        if (!valid_hal_segment(bit_name)) {
+            parser_fail(state, "complexEntry %s has invalid %s name",
+                        base_entry->name,
+                        attribute_name);
+            return;
+        }
+        if (duplicate_entry_name(state->current_pdo, bit_name)) {
+            parser_fail(state, "node %s PDO %u has duplicate entry name %s",
+                        state->current_node->name,
+                        state->current_pdo->number,
+                        bit_name);
+            return;
+        }
+        if (state->current_pdo->entry_count >= LSC_MAX_ENTRIES) {
+            parser_fail(state, "node %s PDO %u has too many entries; maximum is %u",
+                        state->current_node->name,
+                        state->current_pdo->number,
+                        LSC_MAX_ENTRIES);
+            return;
+        }
+
+        bit_entry = &state->current_pdo->entries[state->current_pdo->entry_count];
+        memset(bit_entry, 0, sizeof(*bit_entry));
+        if (copy_text(bit_entry->name, sizeof(bit_entry->name), bit_name) != 0) {
+            parser_fail(state, "complexEntry %s has too long %s name",
+                        base_entry->name,
+                        attribute_name);
+            return;
+        }
+        bit_entry->index = base_entry->index;
+        bit_entry->subindex = (uint8_t)bit_index;
+        bit_entry->bit_length = 1U;
+        bit_entry->bit_offset = (uint8_t)(base_entry->bit_offset + bit_index);
+        bit_entry->hal_type = LSC_HAL_BIT;
+        bit_entry->overlay = true;
+        bit_entry->scale = 1.0;
+
+        state->current_pdo->entry_count += 1U;
+    }
+}
+
 static void XMLCALL start_element(void *user_data, const char *name, const char **attributes)
 {
     lsc_parser_state_t *state = user_data;
@@ -770,6 +883,8 @@ static void XMLCALL start_element(void *user_data, const char *name, const char 
         parse_sdo_element(state, attributes);
     } else if (strcmp(name, "pdoEntry") == 0) {
         parse_entry_element(state, attributes);
+    } else if (strcmp(name, "complexEntry") == 0) {
+        parse_complex_entry_element(state, attributes);
     } else {
         parser_fail(state, "unsupported XML element %s", name);
     }
@@ -1353,6 +1468,7 @@ static int configure_pdo(int socket_fd,
     uint16_t mapping_index;
     uint32_t disabled_cob_id = (uint32_t)pdo->cob_id | 0x80000000U;
     unsigned int entry_index;
+    unsigned int mapping_entry_count = 0U;
 
     if (direction == LSC_PDO_RPDO) {
         communication_index = (uint16_t)(0x1400U + pdo->number - 1U);
@@ -1383,14 +1499,21 @@ static int configure_pdo(int socket_fd,
 
     for (entry_index = 0U; entry_index < pdo->entry_count; ++entry_index) {
         const lsc_entry_config_t *entry = &pdo->entries[entry_index];
-        uint32_t mapping_value = ((uint32_t)entry->index << 16U) |
-                                 ((uint32_t)entry->subindex << 8U) |
-                                 entry->bit_length;
+        uint32_t mapping_value;
+
+        if (entry->no_pin || entry->overlay) {
+            continue;
+        }
+
+        mapping_entry_count += 1U;
+        mapping_value = ((uint32_t)entry->index << 16U) |
+                        ((uint32_t)entry->subindex << 8U) |
+                        entry->bit_length;
 
         if (sdo_download(socket_fd,
                          node_id,
                          mapping_index,
-                         (uint8_t)(entry_index + 1U),
+                         (uint8_t)mapping_entry_count,
                          mapping_value,
                          4U,
                          timeout_ms,
@@ -1403,7 +1526,7 @@ static int configure_pdo(int socket_fd,
                      node_id,
                      mapping_index,
                      0U,
-                     pdo->entry_count,
+                     mapping_entry_count,
                      1U,
                      timeout_ms,
                      abort_code) != 0 ||
@@ -1713,6 +1836,10 @@ static int export_hal_pins(int component_id,
                 for (entry_index = 0U; entry_index < rpdo->entry_count; ++entry_index) {
                     char pin_name[HAL_NAME_LEN + 1];
 
+                    if (rpdo->entries[entry_index].no_pin) {
+                        continue;
+                    }
+
                     if (snprintf(pin_name,
                                  sizeof(pin_name),
                                  "%s.%s.rpdo-%u.%s",
@@ -1753,6 +1880,10 @@ static int export_hal_pins(int component_id,
 
                 for (entry_index = 0U; entry_index < tpdo->entry_count; ++entry_index) {
                     char pin_name[HAL_NAME_LEN + 1];
+
+                    if (tpdo->entries[entry_index].no_pin) {
+                        continue;
+                    }
 
                     if (snprintf(pin_name,
                                  sizeof(pin_name),
@@ -1814,6 +1945,9 @@ static void initialize_hal_pins(const lsc_config_t *config, lsc_hal_t *hal_data)
                 *rpdo_hal->last_error = 0;
 
                 for (entry_index = 0U; entry_index < rpdo->entry_count; ++entry_index) {
+                    if (rpdo->entries[entry_index].no_pin) {
+                        continue;
+                    }
                     switch (rpdo->entries[entry_index].hal_type) {
                     case LSC_HAL_BIT:
                         *rpdo_hal->entries[entry_index].value.bit = 0;
@@ -1837,6 +1971,9 @@ static void initialize_hal_pins(const lsc_config_t *config, lsc_hal_t *hal_data)
                 *tpdo_hal->last_error = 0;
 
                 for (entry_index = 0U; entry_index < tpdo->entry_count; ++entry_index) {
+                    if (tpdo->entries[entry_index].no_pin) {
+                        continue;
+                    }
                     switch (tpdo->entries[entry_index].hal_type) {
                     case LSC_HAL_BIT:
                         *tpdo_hal->entries[entry_index].value.bit = 0;
@@ -2017,6 +2154,9 @@ static void process_tpdo(const lsc_pdo_config_t *pdo,
     }
 
     for (entry_index = 0U; entry_index < pdo->entry_count; ++entry_index) {
+        if (pdo->entries[entry_index].no_pin) {
+            continue;
+        }
         decode_entry(&pdo->entries[entry_index],
                      frame->data,
                      &pdo_hal->entries[entry_index]);
@@ -2120,6 +2260,9 @@ static int send_rpdo(int socket_fd,
     frame.len = pdo->data_length;
 
     for (entry_index = 0U; entry_index < pdo->entry_count; ++entry_index) {
+        if (pdo->entries[entry_index].no_pin) {
+            continue;
+        }
         if (encode_entry(&pdo->entries[entry_index],
                          &pdo_hal->entries[entry_index],
                          frame.data) != 0) {

@@ -84,6 +84,7 @@ typedef struct {
     uint16_t event_timer_ms;
     bool event_timer_set;
     uint32_t period_ms;
+    bool auto_start;
     uint8_t data_length;
     unsigned int entry_count;
     lsc_entry_config_t entries[LSC_MAX_ENTRIES];
@@ -128,6 +129,7 @@ typedef struct {
     hal_u32_t *tx_count;
     hal_s32_t *last_error;
     bool previous_send;
+    bool periodic_started;
     uint64_t next_due_us;
     lsc_entry_hal_t entries[LSC_MAX_ENTRIES];
 } lsc_rpdo_hal_t;
@@ -504,6 +506,7 @@ static void parse_pdo_element(lsc_parser_state_t *state,
     pdo->number = (uint8_t)value;
     pdo->cob_id = default_pdo_cob_id(direction, pdo->number, state->current_node->node_id);
     pdo->transmission_type = 255U;
+    pdo->auto_start = true;
 
     text = attribute_value(attributes, "cobId");
     if (text != NULL) {
@@ -536,6 +539,16 @@ static void parse_pdo_element(lsc_parser_state_t *state,
             return;
         }
         pdo->period_ms = value;
+    }
+
+    text = attribute_value(attributes, "autoStart");
+    if (text != NULL) {
+        if (direction != LSC_PDO_RPDO || parse_boolean(text, &pdo->auto_start) != 0) {
+            parser_fail(state, "node %s PDO %u has an invalid autoStart",
+                        state->current_node->name,
+                        pdo->number);
+            return;
+        }
     }
 
     text = attribute_value(attributes, "inhibitTime100us");
@@ -2319,6 +2332,7 @@ static void prepare_configured_network(const lsc_config_t *config,
                 continue;
             }
             pdo_hal->previous_send = *pdo_hal->send != 0;
+            pdo_hal->periodic_started = pdo->auto_start;
             pdo_hal->next_due_us =
                 pdo->period_ms > 0U ? now_us + (uint64_t)pdo->period_ms * 1000U : 0U;
         }
@@ -2371,7 +2385,12 @@ static int process_rpdo_transmissions(int socket_fd,
 
             trigger = *pdo_hal->send != 0;
             send_requested = trigger && !pdo_hal->previous_send;
-            periodic_due = pdo->period_ms > 0U && now_us >= pdo_hal->next_due_us;
+            if (send_requested) {
+                pdo_hal->periodic_started = true;
+            }
+            periodic_due = pdo_hal->periodic_started &&
+                           pdo->period_ms > 0U &&
+                           now_us >= pdo_hal->next_due_us;
             pdo_hal->previous_send = trigger;
 
             if (*node_hal->enable == 0 || *node_hal->config_ok == 0 ||
@@ -2388,6 +2407,8 @@ static int process_rpdo_transmissions(int socket_fd,
             }
 
             if (periodic_due) {
+                pdo_hal->next_due_us = now_us + (uint64_t)pdo->period_ms * 1000U;
+            } else if (send_requested && pdo->period_ms > 0U) {
                 pdo_hal->next_due_us = now_us + (uint64_t)pdo->period_ms * 1000U;
             }
         }

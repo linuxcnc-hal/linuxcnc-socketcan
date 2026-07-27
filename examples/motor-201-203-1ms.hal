@@ -1,7 +1,5 @@
 loadusr -W lsc_canopen --config examples/motor-201-203-1ms.xml
 
 setp lsc_canopen.motor.enable true
-setp lsc_canopen.motor.rpdo-1.target-position 1000
-setp lsc_canopen.motor.rpdo-1.data-4-7 0
-setp lsc_canopen.motor.rpdo-2.request-data-0-3 0
-setp lsc_canopen.motor.rpdo-2.request-data-4-7 1
+setp lsc_canopen.motor.rpdo-1.target-position 0
+setp lsc_canopen.motor.rpdo-2.enable-motor-1 true

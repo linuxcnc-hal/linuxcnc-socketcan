@@ -1953,7 +1953,7 @@ static void initialize_hal_pins(const lsc_config_t *config, lsc_hal_t *hal_data)
 
             if (rpdo->defined) {
                 lsc_rpdo_hal_t *rpdo_hal = &node_hal->rpdos[pdo_index];
-                *rpdo_hal->send = 0;
+                *rpdo_hal->send = rpdo->auto_start;
                 *rpdo_hal->tx_count = 0U;
                 *rpdo_hal->last_error = 0;
 

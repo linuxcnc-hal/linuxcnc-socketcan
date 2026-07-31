@@ -1,5 +1,6 @@
-loadusr -W lsc_canopen --config examples/motor-201-203-1ms.xml
+loadusr -W lsc_canopen --config motor-201-203-1ms.xml
 
 setp lsc_canopen.motor.enable true
 setp lsc_canopen.motor.rpdo-1.target-position 0
 setp lsc_canopen.motor.rpdo-2.enable-motor-1 true
+setp lsc_canopen.motor.rpdo-1.send true

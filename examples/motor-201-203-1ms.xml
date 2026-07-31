@@ -41,7 +41,9 @@ the index, subindex, and node id are ineffective, and the driver will not send t
                 index="0x2000"
                 subIdx="0"
                 bitLen="32"
-                halType="s32"/>
+                halType="float"
+                signed="true"
+                scale="0.0001"/>
     </rpdo>
 
     <rpdo number="2"
@@ -68,7 +70,9 @@ the index, subindex, and node id are ineffective, and the driver will not send t
                 index="0x2100"
                 subIdx="0"
                 bitLen="32"
-                halType="s32"/>
+                halType="float"
+                signed="true"
+                scale="0.0001"/>
       <!--byte 5 is the current-->
       <pdoEntry name="actual-current"
                 index="0x2101"

@@ -2073,10 +2073,10 @@ static void decode_entry(const lsc_entry_config_t *entry,
     case LSC_HAL_FLOAT:
         if (entry->raw_signed) {
             *entry_hal->value.real =
-                (hal_float_t)sign_extend(raw_value, entry->bit_length) * entry->scale +
+                (hal_float_t)sign_extend(raw_value, entry->bit_length) / entry->scale +
                 entry->offset;
         } else {
-            *entry_hal->value.real = (hal_float_t)raw_value * entry->scale + entry->offset;
+            *entry_hal->value.real = (hal_float_t)raw_value / entry->scale + entry->offset;
         }
         break;
     }
@@ -2117,7 +2117,7 @@ static int encode_entry(const lsc_entry_config_t *entry,
         break;
     case LSC_HAL_FLOAT:
         if (entry->raw_signed) {
-            double scaled_value = (*entry_hal->value.real - entry->offset) / entry->scale;
+            double scaled_value = (*entry_hal->value.real - entry->offset) * entry->scale;
             minimum = entry->bit_length == 32U ? INT32_MIN
                                                : -((int64_t)1 << (entry->bit_length - 1U));
             maximum = entry->bit_length == 32U ? INT32_MAX
@@ -2130,7 +2130,7 @@ static int encode_entry(const lsc_entry_config_t *entry,
             signed_value = llround(scaled_value);
             raw_value = (uint32_t)signed_value & bit_mask(entry->bit_length);
         } else {
-            double scaled_value = (*entry_hal->value.real - entry->offset) / entry->scale;
+            double scaled_value = (*entry_hal->value.real - entry->offset) * entry->scale;
             if (!isfinite(scaled_value) || scaled_value < 0.0 ||
                 scaled_value > (double)bit_mask(entry->bit_length)) {
                 errno = ERANGE;

@@ -190,7 +190,7 @@ Available attributes:
 Float decoding uses:
 
 ```text
-hal-value = raw-value * scale + offset
+hal-value = raw-value / scale + offset
 ```
 
 RPDO float encoding applies the inverse operation.

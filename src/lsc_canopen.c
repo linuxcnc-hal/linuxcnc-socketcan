@@ -24,6 +24,7 @@
 
 #include <rtapi.h>
 #include <hal.h>
+#include "lsc_hal_compat.h"
 
 #define LSC_DEFAULT_COMPONENT "lsc_canopen"
 #define LSC_DEFAULT_INTERFACE "can0"
@@ -113,10 +114,10 @@ typedef struct {
 } lsc_config_t;
 
 typedef union {
-    hal_bit_t *bit;
-    hal_u32_t *u32;
-    hal_s32_t *s32;
-    hal_float_t *real;
+    lsc_bit_t *bit;
+    lsc_u32_t *u32;
+    lsc_s32_t *s32;
+    lsc_float_t *real;
     void *pointer;
 } lsc_pin_t;
 
@@ -125,9 +126,9 @@ typedef struct {
 } lsc_entry_hal_t;
 
 typedef struct {
-    hal_bit_t *send;
-    hal_u32_t *tx_count;
-    hal_s32_t *last_error;
+    lsc_bit_t *send;
+    lsc_u32_t *tx_count;
+    lsc_s32_t *last_error;
     bool previous_send;
     bool periodic_started;
     uint64_t next_due_us;
@@ -135,31 +136,31 @@ typedef struct {
 } lsc_rpdo_hal_t;
 
 typedef struct {
-    hal_u32_t *rx_count;
-    hal_s32_t *last_error;
+    lsc_u32_t *rx_count;
+    lsc_s32_t *last_error;
     lsc_entry_hal_t entries[LSC_MAX_ENTRIES];
 } lsc_tpdo_hal_t;
 
 typedef struct {
-    hal_bit_t *enable;
-    hal_bit_t *online;
-    hal_bit_t *operational;
-    hal_bit_t *config_ok;
-    hal_u32_t *nmt_state;
-    hal_u32_t *heartbeat_age_ms;
-    hal_u32_t *sdo_abort;
+    lsc_bit_t *enable;
+    lsc_bit_t *online;
+    lsc_bit_t *operational;
+    lsc_bit_t *config_ok;
+    lsc_u32_t *nmt_state;
+    lsc_u32_t *heartbeat_age_ms;
+    lsc_u32_t *sdo_abort;
     uint64_t last_heartbeat_us;
     lsc_rpdo_hal_t rpdos[LSC_MAX_PDOS];
     lsc_tpdo_hal_t tpdos[LSC_MAX_PDOS];
 } lsc_node_hal_t;
 
 typedef struct {
-    hal_bit_t *connected;
-    hal_bit_t *config_ok;
-    hal_bit_t *bus_off;
-    hal_u32_t *error_count;
-    hal_s32_t *last_error;
-    hal_u32_t *sync_count;
+    lsc_bit_t *connected;
+    lsc_bit_t *config_ok;
+    lsc_bit_t *bus_off;
+    lsc_u32_t *error_count;
+    lsc_s32_t *last_error;
+    lsc_u32_t *sync_count;
     lsc_node_hal_t nodes[LSC_MAX_NODES];
 } lsc_hal_t;
 
@@ -1701,13 +1702,13 @@ static int export_entry_pin(int component_id,
 {
     switch (hal_type) {
     case LSC_HAL_BIT:
-        return hal_pin_bit_newf(direction, &entry_hal->value.bit, component_id, "%s", pin_name);
+        return lsc_pin_bit_newf(direction, &entry_hal->value.bit, component_id, "%s", pin_name);
     case LSC_HAL_U32:
-        return hal_pin_u32_newf(direction, &entry_hal->value.u32, component_id, "%s", pin_name);
+        return lsc_pin_u32_newf(direction, &entry_hal->value.u32, component_id, "%s", pin_name);
     case LSC_HAL_S32:
-        return hal_pin_s32_newf(direction, &entry_hal->value.s32, component_id, "%s", pin_name);
+        return lsc_pin_s32_newf(direction, &entry_hal->value.s32, component_id, "%s", pin_name);
     case LSC_HAL_FLOAT:
-        return hal_pin_float_newf(direction, &entry_hal->value.real, component_id, "%s", pin_name);
+        return lsc_pin_float_newf(direction, &entry_hal->value.real, component_id, "%s", pin_name);
     }
 
     return -EINVAL;
@@ -1721,37 +1722,37 @@ static int export_hal_pins(int component_id,
     unsigned int node_index;
     int result;
 
-    result = hal_pin_bit_newf(HAL_OUT,
+    result = lsc_pin_bit_newf(HAL_OUT,
                               &hal_data->connected,
                               component_id,
                               "%s.connected",
                               component_name);
     if (result < 0) return result;
-    result = hal_pin_bit_newf(HAL_OUT,
+    result = lsc_pin_bit_newf(HAL_OUT,
                               &hal_data->config_ok,
                               component_id,
                               "%s.config-ok",
                               component_name);
     if (result < 0) return result;
-    result = hal_pin_bit_newf(HAL_OUT,
+    result = lsc_pin_bit_newf(HAL_OUT,
                               &hal_data->bus_off,
                               component_id,
                               "%s.bus-off",
                               component_name);
     if (result < 0) return result;
-    result = hal_pin_u32_newf(HAL_OUT,
+    result = lsc_pin_u32_newf(HAL_OUT,
                               &hal_data->error_count,
                               component_id,
                               "%s.error-count",
                               component_name);
     if (result < 0) return result;
-    result = hal_pin_s32_newf(HAL_OUT,
+    result = lsc_pin_s32_newf(HAL_OUT,
                               &hal_data->last_error,
                               component_id,
                               "%s.last-error",
                               component_name);
     if (result < 0) return result;
-    result = hal_pin_u32_newf(HAL_OUT,
+    result = lsc_pin_u32_newf(HAL_OUT,
                               &hal_data->sync_count,
                               component_id,
                               "%s.sync-count",
@@ -1763,49 +1764,49 @@ static int export_hal_pins(int component_id,
         lsc_node_hal_t *node_hal = &hal_data->nodes[node_index];
         unsigned int pdo_index;
 
-        result = hal_pin_bit_newf(HAL_IN,
+        result = lsc_pin_bit_newf(HAL_IN,
                                   &node_hal->enable,
                                   component_id,
                                   "%s.%s.enable",
                                   component_name,
                                   node->name);
         if (result < 0) return result;
-        result = hal_pin_bit_newf(HAL_OUT,
+        result = lsc_pin_bit_newf(HAL_OUT,
                                   &node_hal->online,
                                   component_id,
                                   "%s.%s.online",
                                   component_name,
                                   node->name);
         if (result < 0) return result;
-        result = hal_pin_bit_newf(HAL_OUT,
+        result = lsc_pin_bit_newf(HAL_OUT,
                                   &node_hal->operational,
                                   component_id,
                                   "%s.%s.operational",
                                   component_name,
                                   node->name);
         if (result < 0) return result;
-        result = hal_pin_bit_newf(HAL_OUT,
+        result = lsc_pin_bit_newf(HAL_OUT,
                                   &node_hal->config_ok,
                                   component_id,
                                   "%s.%s.config-ok",
                                   component_name,
                                   node->name);
         if (result < 0) return result;
-        result = hal_pin_u32_newf(HAL_OUT,
+        result = lsc_pin_u32_newf(HAL_OUT,
                                   &node_hal->nmt_state,
                                   component_id,
                                   "%s.%s.nmt-state",
                                   component_name,
                                   node->name);
         if (result < 0) return result;
-        result = hal_pin_u32_newf(HAL_OUT,
+        result = lsc_pin_u32_newf(HAL_OUT,
                                   &node_hal->heartbeat_age_ms,
                                   component_id,
                                   "%s.%s.heartbeat-age-ms",
                                   component_name,
                                   node->name);
         if (result < 0) return result;
-        result = hal_pin_u32_newf(HAL_OUT,
+        result = lsc_pin_u32_newf(HAL_OUT,
                                   &node_hal->sdo_abort,
                                   component_id,
                                   "%s.%s.sdo-abort",
@@ -1821,7 +1822,7 @@ static int export_hal_pins(int component_id,
             if (rpdo->defined) {
                 lsc_rpdo_hal_t *rpdo_hal = &node_hal->rpdos[pdo_index];
 
-                result = hal_pin_bit_newf(HAL_IN,
+                result = lsc_pin_bit_newf(HAL_IN,
                                           &rpdo_hal->send,
                                           component_id,
                                           "%s.%s.rpdo-%u.send",
@@ -1829,7 +1830,7 @@ static int export_hal_pins(int component_id,
                                           node->name,
                                           rpdo->number);
                 if (result < 0) return result;
-                result = hal_pin_u32_newf(HAL_OUT,
+                result = lsc_pin_u32_newf(HAL_OUT,
                                           &rpdo_hal->tx_count,
                                           component_id,
                                           "%s.%s.rpdo-%u.tx-count",
@@ -1837,7 +1838,7 @@ static int export_hal_pins(int component_id,
                                           node->name,
                                           rpdo->number);
                 if (result < 0) return result;
-                result = hal_pin_s32_newf(HAL_OUT,
+                result = lsc_pin_s32_newf(HAL_OUT,
                                           &rpdo_hal->last_error,
                                           component_id,
                                           "%s.%s.rpdo-%u.last-error",
@@ -1874,7 +1875,7 @@ static int export_hal_pins(int component_id,
             if (tpdo->defined) {
                 lsc_tpdo_hal_t *tpdo_hal = &node_hal->tpdos[pdo_index];
 
-                result = hal_pin_u32_newf(HAL_OUT,
+                result = lsc_pin_u32_newf(HAL_OUT,
                                           &tpdo_hal->rx_count,
                                           component_id,
                                           "%s.%s.tpdo-%u.rx-count",
@@ -1882,7 +1883,7 @@ static int export_hal_pins(int component_id,
                                           node->name,
                                           tpdo->number);
                 if (result < 0) return result;
-                result = hal_pin_s32_newf(HAL_OUT,
+                result = lsc_pin_s32_newf(HAL_OUT,
                                           &tpdo_hal->last_error,
                                           component_id,
                                           "%s.%s.tpdo-%u.last-error",
@@ -2073,10 +2074,10 @@ static void decode_entry(const lsc_entry_config_t *entry,
     case LSC_HAL_FLOAT:
         if (entry->raw_signed) {
             *entry_hal->value.real =
-                (hal_float_t)sign_extend(raw_value, entry->bit_length) / entry->scale +
+                (lsc_float_t)sign_extend(raw_value, entry->bit_length) / entry->scale +
                 entry->offset;
         } else {
-            *entry_hal->value.real = (hal_float_t)raw_value / entry->scale + entry->offset;
+            *entry_hal->value.real = (lsc_float_t)raw_value / entry->scale + entry->offset;
         }
         break;
     }
@@ -2151,7 +2152,7 @@ static int encode_entry(const lsc_entry_config_t *entry,
 
 static void record_global_error(lsc_hal_t *hal_data, int error_number)
 {
-    *hal_data->last_error = (hal_s32_t)error_number;
+    *hal_data->last_error = (lsc_s32_t)error_number;
     *hal_data->error_count += 1U;
 }
 
@@ -2450,7 +2451,7 @@ static void update_heartbeat_status(const lsc_config_t *config,
 
         age_ms = (now_us - node_hal->last_heartbeat_us) / 1000U;
         *node_hal->heartbeat_age_ms =
-            age_ms > UINT32_MAX ? UINT32_MAX : (hal_u32_t)age_ms;
+            age_ms > UINT32_MAX ? UINT32_MAX : (lsc_u32_t)age_ms;
         if (age_ms > node->heartbeat_timeout_ms) {
             *node_hal->online = 0;
             *node_hal->operational = 0;

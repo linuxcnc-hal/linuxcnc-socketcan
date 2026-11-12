@@ -18,6 +18,7 @@
 
 #include <rtapi.h>
 #include <hal.h>
+#include "lsc_hal_compat.h"
 
 #define DEFAULT_INTERFACE "can0"
 #define DEFAULT_COMPONENT_NAME "lsc_socketcan"
@@ -26,29 +27,29 @@
 #define MAX_FRAMES_PER_CYCLE 256U
 
 typedef struct {
-    hal_bit_t *enable;
-    hal_bit_t *connected;
-    hal_bit_t *bus_off;
-    hal_u32_t *error_count;
-    hal_s32_t *last_error;
-    hal_u32_t *last_can_error;
+    lsc_bit_t *enable;
+    lsc_bit_t *connected;
+    lsc_bit_t *bus_off;
+    lsc_u32_t *error_count;
+    lsc_s32_t *last_error;
+    lsc_u32_t *last_can_error;
 
-    hal_bit_t *tx_trigger;
-    hal_u32_t *tx_id;
-    hal_bit_t *tx_extended;
-    hal_bit_t *tx_rtr;
-    hal_u32_t *tx_length;
-    hal_u32_t *tx_data[CAN_MAX_DLEN];
-    hal_u32_t *tx_count;
+    lsc_bit_t *tx_trigger;
+    lsc_u32_t *tx_id;
+    lsc_bit_t *tx_extended;
+    lsc_bit_t *tx_rtr;
+    lsc_u32_t *tx_length;
+    lsc_u32_t *tx_data[CAN_MAX_DLEN];
+    lsc_u32_t *tx_count;
 
-    hal_bit_t *rx_new;
-    hal_u32_t *rx_sequence;
-    hal_u32_t *rx_id;
-    hal_bit_t *rx_extended;
-    hal_bit_t *rx_rtr;
-    hal_u32_t *rx_length;
-    hal_u32_t *rx_data[CAN_MAX_DLEN];
-    hal_u32_t *rx_count;
+    lsc_bit_t *rx_new;
+    lsc_u32_t *rx_sequence;
+    lsc_u32_t *rx_id;
+    lsc_bit_t *rx_extended;
+    lsc_bit_t *rx_rtr;
+    lsc_u32_t *rx_length;
+    lsc_u32_t *rx_data[CAN_MAX_DLEN];
+    lsc_u32_t *rx_count;
 } lsc_pins_t;
 
 typedef struct {
@@ -164,31 +165,31 @@ static int export_pins(int component_id, const char *component_name, lsc_pins_t 
     int result;
     unsigned int index;
 
-    result = hal_pin_bit_newf(HAL_IN, &pins->enable, component_id, "%s.enable", component_name);
+    result = lsc_pin_bit_newf(HAL_IN, &pins->enable, component_id, "%s.enable", component_name);
     if (result < 0) return result;
-    result = hal_pin_bit_newf(HAL_OUT, &pins->connected, component_id, "%s.connected", component_name);
+    result = lsc_pin_bit_newf(HAL_OUT, &pins->connected, component_id, "%s.connected", component_name);
     if (result < 0) return result;
-    result = hal_pin_bit_newf(HAL_OUT, &pins->bus_off, component_id, "%s.bus-off", component_name);
+    result = lsc_pin_bit_newf(HAL_OUT, &pins->bus_off, component_id, "%s.bus-off", component_name);
     if (result < 0) return result;
-    result = hal_pin_u32_newf(HAL_OUT, &pins->error_count, component_id, "%s.error-count", component_name);
+    result = lsc_pin_u32_newf(HAL_OUT, &pins->error_count, component_id, "%s.error-count", component_name);
     if (result < 0) return result;
-    result = hal_pin_s32_newf(HAL_OUT, &pins->last_error, component_id, "%s.last-error", component_name);
+    result = lsc_pin_s32_newf(HAL_OUT, &pins->last_error, component_id, "%s.last-error", component_name);
     if (result < 0) return result;
-    result = hal_pin_u32_newf(HAL_OUT, &pins->last_can_error, component_id, "%s.last-can-error", component_name);
+    result = lsc_pin_u32_newf(HAL_OUT, &pins->last_can_error, component_id, "%s.last-can-error", component_name);
     if (result < 0) return result;
 
-    result = hal_pin_bit_newf(HAL_IN, &pins->tx_trigger, component_id, "%s.tx-trigger", component_name);
+    result = lsc_pin_bit_newf(HAL_IN, &pins->tx_trigger, component_id, "%s.tx-trigger", component_name);
     if (result < 0) return result;
-    result = hal_pin_u32_newf(HAL_IN, &pins->tx_id, component_id, "%s.tx-id", component_name);
+    result = lsc_pin_u32_newf(HAL_IN, &pins->tx_id, component_id, "%s.tx-id", component_name);
     if (result < 0) return result;
-    result = hal_pin_bit_newf(HAL_IN, &pins->tx_extended, component_id, "%s.tx-extended", component_name);
+    result = lsc_pin_bit_newf(HAL_IN, &pins->tx_extended, component_id, "%s.tx-extended", component_name);
     if (result < 0) return result;
-    result = hal_pin_bit_newf(HAL_IN, &pins->tx_rtr, component_id, "%s.tx-rtr", component_name);
+    result = lsc_pin_bit_newf(HAL_IN, &pins->tx_rtr, component_id, "%s.tx-rtr", component_name);
     if (result < 0) return result;
-    result = hal_pin_u32_newf(HAL_IN, &pins->tx_length, component_id, "%s.tx-length", component_name);
+    result = lsc_pin_u32_newf(HAL_IN, &pins->tx_length, component_id, "%s.tx-length", component_name);
     if (result < 0) return result;
     for (index = 0U; index < CAN_MAX_DLEN; ++index) {
-        result = hal_pin_u32_newf(HAL_IN,
+        result = lsc_pin_u32_newf(HAL_IN,
                                   &pins->tx_data[index],
                                   component_id,
                                   "%s.tx-data-%u",
@@ -196,23 +197,23 @@ static int export_pins(int component_id, const char *component_name, lsc_pins_t 
                                   index);
         if (result < 0) return result;
     }
-    result = hal_pin_u32_newf(HAL_OUT, &pins->tx_count, component_id, "%s.tx-count", component_name);
+    result = lsc_pin_u32_newf(HAL_OUT, &pins->tx_count, component_id, "%s.tx-count", component_name);
     if (result < 0) return result;
 
-    result = hal_pin_bit_newf(HAL_OUT, &pins->rx_new, component_id, "%s.rx-new", component_name);
+    result = lsc_pin_bit_newf(HAL_OUT, &pins->rx_new, component_id, "%s.rx-new", component_name);
     if (result < 0) return result;
-    result = hal_pin_u32_newf(HAL_OUT, &pins->rx_sequence, component_id, "%s.rx-sequence", component_name);
+    result = lsc_pin_u32_newf(HAL_OUT, &pins->rx_sequence, component_id, "%s.rx-sequence", component_name);
     if (result < 0) return result;
-    result = hal_pin_u32_newf(HAL_OUT, &pins->rx_id, component_id, "%s.rx-id", component_name);
+    result = lsc_pin_u32_newf(HAL_OUT, &pins->rx_id, component_id, "%s.rx-id", component_name);
     if (result < 0) return result;
-    result = hal_pin_bit_newf(HAL_OUT, &pins->rx_extended, component_id, "%s.rx-extended", component_name);
+    result = lsc_pin_bit_newf(HAL_OUT, &pins->rx_extended, component_id, "%s.rx-extended", component_name);
     if (result < 0) return result;
-    result = hal_pin_bit_newf(HAL_OUT, &pins->rx_rtr, component_id, "%s.rx-rtr", component_name);
+    result = lsc_pin_bit_newf(HAL_OUT, &pins->rx_rtr, component_id, "%s.rx-rtr", component_name);
     if (result < 0) return result;
-    result = hal_pin_u32_newf(HAL_OUT, &pins->rx_length, component_id, "%s.rx-length", component_name);
+    result = lsc_pin_u32_newf(HAL_OUT, &pins->rx_length, component_id, "%s.rx-length", component_name);
     if (result < 0) return result;
     for (index = 0U; index < CAN_MAX_DLEN; ++index) {
-        result = hal_pin_u32_newf(HAL_OUT,
+        result = lsc_pin_u32_newf(HAL_OUT,
                                   &pins->rx_data[index],
                                   component_id,
                                   "%s.rx-data-%u",
@@ -220,7 +221,7 @@ static int export_pins(int component_id, const char *component_name, lsc_pins_t 
                                   index);
         if (result < 0) return result;
     }
-    result = hal_pin_u32_newf(HAL_OUT, &pins->rx_count, component_id, "%s.rx-count", component_name);
+    result = lsc_pin_u32_newf(HAL_OUT, &pins->rx_count, component_id, "%s.rx-count", component_name);
     if (result < 0) return result;
 
     return 0;
@@ -320,7 +321,7 @@ static int open_can_socket(const char *interface_name)
 
 static void record_system_error(lsc_pins_t *pins, int error_number)
 {
-    *pins->last_error = (hal_s32_t)error_number;
+    *pins->last_error = (lsc_s32_t)error_number;
     *pins->error_count += 1U;
 }
 
@@ -406,8 +407,8 @@ static int receive_frames(int socket_fd, lsc_pins_t *pins)
 static int build_transmit_frame(const lsc_pins_t *pins, struct can_frame *frame)
 {
     bool is_extended = *pins->tx_extended != 0;
-    hal_u32_t identifier = *pins->tx_id;
-    hal_u32_t length = *pins->tx_length;
+    lsc_u32_t identifier = *pins->tx_id;
+    lsc_u32_t length = *pins->tx_length;
     unsigned int index;
 
     if (length > CAN_MAX_DLEN) {

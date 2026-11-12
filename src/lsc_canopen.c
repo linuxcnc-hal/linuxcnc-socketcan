@@ -249,19 +249,19 @@ static int parse_unsigned(const char *text, uint32_t minimum, uint32_t maximum, 
         return -1;
     }
 
-    lsc_set(value, (uint32_t)parsed);
+    *value = (uint32_t)parsed;
     return 0;
 }
 
 static int parse_boolean(const char *text, bool *value)
 {
     if (strcasecmp(text, "true") == 0 || strcmp(text, "1") == 0) {
-        lsc_set(value, true);
+        *value = true;
         return 0;
     }
 
     if (strcasecmp(text, "false") == 0 || strcmp(text, "0") == 0) {
-        lsc_set(value, false);
+        *value = false;
         return 0;
     }
 
@@ -279,20 +279,20 @@ static int parse_real(const char *text, double *value)
         return -1;
     }
 
-    lsc_set(value, parsed);
+    *value = parsed;
     return 0;
 }
 
 static int parse_hal_type(const char *text, lsc_hal_type_t *hal_type)
 {
     if (strcmp(text, "bit") == 0) {
-        lsc_set(hal_type, LSC_HAL_BIT);
+        *hal_type = LSC_HAL_BIT;
     } else if (strcmp(text, "u32") == 0) {
-        lsc_set(hal_type, LSC_HAL_U32);
+        *hal_type = LSC_HAL_U32;
     } else if (strcmp(text, "s32") == 0) {
-        lsc_set(hal_type, LSC_HAL_S32);
+        *hal_type = LSC_HAL_S32;
     } else if (strcmp(text, "float") == 0) {
-        lsc_set(hal_type, LSC_HAL_FLOAT);
+        *hal_type = LSC_HAL_FLOAT;
     } else {
         return -1;
     }
@@ -1403,7 +1403,7 @@ static int wait_for_sdo_response(int socket_fd,
                 return 0;
             }
             if (frame.data[0] == 0x80U && frame.len == 8U) {
-                lsc_set(abort_code, read_le32(&frame.data[4]));
+                *abort_code = read_le32(&frame.data[4]);
                 errno = ECANCELED;
                 return -1;
             }
@@ -1439,7 +1439,7 @@ static int sdo_download(int socket_fd,
         return -1;
     }
 
-    lsc_set(abort_code, 0U);
+    *abort_code = 0U;
     request[1] = (uint8_t)(index & 0xFFU);
     request[2] = (uint8_t)(index >> 8U);
     request[3] = subindex;
@@ -1696,7 +1696,7 @@ static int configure_network(int socket_fd, const lsc_config_t *config, lsc_hal_
 
 static int export_entry_pin(int component_id,
                             const char *pin_name,
-                            hal_pin_dir_t direction,
+                            hal_pdir_t direction,
                             lsc_hal_type_t hal_type,
                             lsc_entry_hal_t *entry_hal)
 {
@@ -2348,7 +2348,7 @@ static void mark_network_down(int *socket_fd,
 
     if (*socket_fd >= 0) {
         close(*socket_fd);
-        lsc_set(socket_fd, -1);
+        *socket_fd = -1;
     }
 
     lsc_set(hal_data->connected, 0);

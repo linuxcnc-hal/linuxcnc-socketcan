@@ -114,10 +114,10 @@ typedef struct {
 } lsc_config_t;
 
 typedef union {
-    lsc_bit_t *bit;
-    lsc_u32_t *u32;
-    lsc_s32_t *s32;
-    lsc_float_t *real;
+    lsc_bit_t bit;
+    lsc_u32_t u32;
+    lsc_s32_t s32;
+    lsc_float_t real;
     void *pointer;
 } lsc_pin_t;
 
@@ -126,9 +126,9 @@ typedef struct {
 } lsc_entry_hal_t;
 
 typedef struct {
-    lsc_bit_t *send;
-    lsc_u32_t *tx_count;
-    lsc_s32_t *last_error;
+    lsc_bit_t send;
+    lsc_u32_t tx_count;
+    lsc_s32_t last_error;
     bool previous_send;
     bool periodic_started;
     uint64_t next_due_us;
@@ -136,31 +136,31 @@ typedef struct {
 } lsc_rpdo_hal_t;
 
 typedef struct {
-    lsc_u32_t *rx_count;
-    lsc_s32_t *last_error;
+    lsc_u32_t rx_count;
+    lsc_s32_t last_error;
     lsc_entry_hal_t entries[LSC_MAX_ENTRIES];
 } lsc_tpdo_hal_t;
 
 typedef struct {
-    lsc_bit_t *enable;
-    lsc_bit_t *online;
-    lsc_bit_t *operational;
-    lsc_bit_t *config_ok;
-    lsc_u32_t *nmt_state;
-    lsc_u32_t *heartbeat_age_ms;
-    lsc_u32_t *sdo_abort;
+    lsc_bit_t enable;
+    lsc_bit_t online;
+    lsc_bit_t operational;
+    lsc_bit_t config_ok;
+    lsc_u32_t nmt_state;
+    lsc_u32_t heartbeat_age_ms;
+    lsc_u32_t sdo_abort;
     uint64_t last_heartbeat_us;
     lsc_rpdo_hal_t rpdos[LSC_MAX_PDOS];
     lsc_tpdo_hal_t tpdos[LSC_MAX_PDOS];
 } lsc_node_hal_t;
 
 typedef struct {
-    lsc_bit_t *connected;
-    lsc_bit_t *config_ok;
-    lsc_bit_t *bus_off;
-    lsc_u32_t *error_count;
-    lsc_s32_t *last_error;
-    lsc_u32_t *sync_count;
+    lsc_bit_t connected;
+    lsc_bit_t config_ok;
+    lsc_bit_t bus_off;
+    lsc_u32_t error_count;
+    lsc_s32_t last_error;
+    lsc_u32_t sync_count;
     lsc_node_hal_t nodes[LSC_MAX_NODES];
 } lsc_hal_t;
 
@@ -249,19 +249,19 @@ static int parse_unsigned(const char *text, uint32_t minimum, uint32_t maximum, 
         return -1;
     }
 
-    *value = (uint32_t)parsed;
+    lsc_set(value, (uint32_t)parsed);
     return 0;
 }
 
 static int parse_boolean(const char *text, bool *value)
 {
     if (strcasecmp(text, "true") == 0 || strcmp(text, "1") == 0) {
-        *value = true;
+        lsc_set(value, true);
         return 0;
     }
 
     if (strcasecmp(text, "false") == 0 || strcmp(text, "0") == 0) {
-        *value = false;
+        lsc_set(value, false);
         return 0;
     }
 
@@ -279,20 +279,20 @@ static int parse_real(const char *text, double *value)
         return -1;
     }
 
-    *value = parsed;
+    lsc_set(value, parsed);
     return 0;
 }
 
 static int parse_hal_type(const char *text, lsc_hal_type_t *hal_type)
 {
     if (strcmp(text, "bit") == 0) {
-        *hal_type = LSC_HAL_BIT;
+        lsc_set(hal_type, LSC_HAL_BIT);
     } else if (strcmp(text, "u32") == 0) {
-        *hal_type = LSC_HAL_U32;
+        lsc_set(hal_type, LSC_HAL_U32);
     } else if (strcmp(text, "s32") == 0) {
-        *hal_type = LSC_HAL_S32;
+        lsc_set(hal_type, LSC_HAL_S32);
     } else if (strcmp(text, "float") == 0) {
-        *hal_type = LSC_HAL_FLOAT;
+        lsc_set(hal_type, LSC_HAL_FLOAT);
     } else {
         return -1;
     }
@@ -1403,7 +1403,7 @@ static int wait_for_sdo_response(int socket_fd,
                 return 0;
             }
             if (frame.data[0] == 0x80U && frame.len == 8U) {
-                *abort_code = read_le32(&frame.data[4]);
+                lsc_set(abort_code, read_le32(&frame.data[4]));
                 errno = ECANCELED;
                 return -1;
             }
@@ -1439,7 +1439,7 @@ static int sdo_download(int socket_fd,
         return -1;
     }
 
-    *abort_code = 0U;
+    lsc_set(abort_code, 0U);
     request[1] = (uint8_t)(index & 0xFFU);
     request[2] = (uint8_t)(index >> 8U);
     request[3] = subindex;
@@ -1601,8 +1601,8 @@ static int configure_node(int socket_fd,
                            node->sdo_download_count > 0U;
     uint32_t abort_code = 0U;
 
-    *node_hal->config_ok = 0;
-    *node_hal->sdo_abort = 0U;
+    lsc_set(node_hal->config_ok, 0);
+    lsc_set(node_hal->sdo_abort, 0U);
 
     if (needs_sdo_setup) {
         if (send_nmt(socket_fd, 0x80U, node->node_id, config->sdo_timeout_ms) != 0) {
@@ -1619,7 +1619,7 @@ static int configure_node(int socket_fd,
                          2U,
                          config->sdo_timeout_ms,
                          &abort_code) != 0) {
-            *node_hal->sdo_abort = abort_code;
+            lsc_set(node_hal->sdo_abort, abort_code);
             return -1;
         }
 
@@ -1632,7 +1632,7 @@ static int configure_node(int socket_fd,
                                   &node->rpdos[pdo_index],
                                   config->sdo_timeout_ms,
                                   &abort_code) != 0) {
-                    *node_hal->sdo_abort = abort_code;
+                    lsc_set(node_hal->sdo_abort, abort_code);
                     return -1;
                 }
                 if (node->tpdos[pdo_index].defined &&
@@ -1642,7 +1642,7 @@ static int configure_node(int socket_fd,
                                   &node->tpdos[pdo_index],
                                   config->sdo_timeout_ms,
                                   &abort_code) != 0) {
-                    *node_hal->sdo_abort = abort_code;
+                    lsc_set(node_hal->sdo_abort, abort_code);
                     return -1;
                 }
             }
@@ -1661,7 +1661,7 @@ static int configure_node(int socket_fd,
                              download->size,
                              config->sdo_timeout_ms,
                              &abort_code) != 0) {
-                *node_hal->sdo_abort = abort_code;
+                lsc_set(node_hal->sdo_abort, abort_code);
                 return -1;
             }
         }
@@ -1672,7 +1672,7 @@ static int configure_node(int socket_fd,
         return -1;
     }
 
-    *node_hal->config_ok = 1;
+    lsc_set(node_hal->config_ok, 1);
     return 0;
 }
 
@@ -1680,7 +1680,7 @@ static int configure_network(int socket_fd, const lsc_config_t *config, lsc_hal_
 {
     unsigned int node_index;
 
-    *hal_data->config_ok = 0;
+    lsc_set(hal_data->config_ok, 0);
     for (node_index = 0U; node_index < config->node_count; ++node_index) {
         if (configure_node(socket_fd,
                            config,
@@ -1690,7 +1690,7 @@ static int configure_network(int socket_fd, const lsc_config_t *config, lsc_hal_
         }
     }
 
-    *hal_data->config_ok = 1;
+    lsc_set(hal_data->config_ok, 1);
     return 0;
 }
 
@@ -1926,25 +1926,25 @@ static void initialize_hal_pins(const lsc_config_t *config, lsc_hal_t *hal_data)
 {
     unsigned int node_index;
 
-    *hal_data->connected = 0;
-    *hal_data->config_ok = 0;
-    *hal_data->bus_off = 0;
-    *hal_data->error_count = 0U;
-    *hal_data->last_error = 0;
-    *hal_data->sync_count = 0U;
+    lsc_set(hal_data->connected, 0);
+    lsc_set(hal_data->config_ok, 0);
+    lsc_set(hal_data->bus_off, 0);
+    lsc_set(hal_data->error_count, 0U);
+    lsc_set(hal_data->last_error, 0);
+    lsc_set(hal_data->sync_count, 0U);
 
     for (node_index = 0U; node_index < config->node_count; ++node_index) {
         const lsc_node_config_t *node = &config->nodes[node_index];
         lsc_node_hal_t *node_hal = &hal_data->nodes[node_index];
         unsigned int pdo_index;
 
-        *node_hal->enable = 1;
-        *node_hal->online = 0;
-        *node_hal->operational = 0;
-        *node_hal->config_ok = 0;
-        *node_hal->nmt_state = 0U;
-        *node_hal->heartbeat_age_ms = UINT32_MAX;
-        *node_hal->sdo_abort = 0U;
+        lsc_set(node_hal->enable, 1);
+        lsc_set(node_hal->online, 0);
+        lsc_set(node_hal->operational, 0);
+        lsc_set(node_hal->config_ok, 0);
+        lsc_set(node_hal->nmt_state, 0U);
+        lsc_set(node_hal->heartbeat_age_ms, UINT32_MAX);
+        lsc_set(node_hal->sdo_abort, 0U);
         node_hal->last_heartbeat_us = 0U;
 
         for (pdo_index = 0U; pdo_index < LSC_MAX_PDOS; ++pdo_index) {
@@ -1954,9 +1954,9 @@ static void initialize_hal_pins(const lsc_config_t *config, lsc_hal_t *hal_data)
 
             if (rpdo->defined) {
                 lsc_rpdo_hal_t *rpdo_hal = &node_hal->rpdos[pdo_index];
-                *rpdo_hal->send = rpdo->auto_start;
-                *rpdo_hal->tx_count = 0U;
-                *rpdo_hal->last_error = 0;
+                lsc_set(rpdo_hal->send, rpdo->auto_start);
+                lsc_set(rpdo_hal->tx_count, 0U);
+                lsc_set(rpdo_hal->last_error, 0);
 
                 for (entry_index = 0U; entry_index < rpdo->entry_count; ++entry_index) {
                     if (rpdo->entries[entry_index].no_pin) {
@@ -1964,16 +1964,16 @@ static void initialize_hal_pins(const lsc_config_t *config, lsc_hal_t *hal_data)
                     }
                     switch (rpdo->entries[entry_index].hal_type) {
                     case LSC_HAL_BIT:
-                        *rpdo_hal->entries[entry_index].value.bit = 0;
+                        lsc_set(rpdo_hal->entries[entry_index].value.bit, 0);
                         break;
                     case LSC_HAL_U32:
-                        *rpdo_hal->entries[entry_index].value.u32 = 0U;
+                        lsc_set(rpdo_hal->entries[entry_index].value.u32, 0U);
                         break;
                     case LSC_HAL_S32:
-                        *rpdo_hal->entries[entry_index].value.s32 = 0;
+                        lsc_set(rpdo_hal->entries[entry_index].value.s32, 0);
                         break;
                     case LSC_HAL_FLOAT:
-                        *rpdo_hal->entries[entry_index].value.real = 0.0;
+                        lsc_set(rpdo_hal->entries[entry_index].value.real, 0.0);
                         break;
                     }
                 }
@@ -1981,8 +1981,8 @@ static void initialize_hal_pins(const lsc_config_t *config, lsc_hal_t *hal_data)
 
             if (tpdo->defined) {
                 lsc_tpdo_hal_t *tpdo_hal = &node_hal->tpdos[pdo_index];
-                *tpdo_hal->rx_count = 0U;
-                *tpdo_hal->last_error = 0;
+                lsc_set(tpdo_hal->rx_count, 0U);
+                lsc_set(tpdo_hal->last_error, 0);
 
                 for (entry_index = 0U; entry_index < tpdo->entry_count; ++entry_index) {
                     if (tpdo->entries[entry_index].no_pin) {
@@ -1990,16 +1990,16 @@ static void initialize_hal_pins(const lsc_config_t *config, lsc_hal_t *hal_data)
                     }
                     switch (tpdo->entries[entry_index].hal_type) {
                     case LSC_HAL_BIT:
-                        *tpdo_hal->entries[entry_index].value.bit = 0;
+                        lsc_set(tpdo_hal->entries[entry_index].value.bit, 0);
                         break;
                     case LSC_HAL_U32:
-                        *tpdo_hal->entries[entry_index].value.u32 = 0U;
+                        lsc_set(tpdo_hal->entries[entry_index].value.u32, 0U);
                         break;
                     case LSC_HAL_S32:
-                        *tpdo_hal->entries[entry_index].value.s32 = 0;
+                        lsc_set(tpdo_hal->entries[entry_index].value.s32, 0);
                         break;
                     case LSC_HAL_FLOAT:
-                        *tpdo_hal->entries[entry_index].value.real = 0.0;
+                        lsc_set(tpdo_hal->entries[entry_index].value.real, 0.0);
                         break;
                     }
                 }
@@ -2063,21 +2063,21 @@ static void decode_entry(const lsc_entry_config_t *entry,
 
     switch (entry->hal_type) {
     case LSC_HAL_BIT:
-        *entry_hal->value.bit = raw_value != 0U;
+        lsc_set(entry_hal->value.bit, raw_value != 0U);
         break;
     case LSC_HAL_U32:
-        *entry_hal->value.u32 = raw_value;
+        lsc_set(entry_hal->value.u32, raw_value);
         break;
     case LSC_HAL_S32:
-        *entry_hal->value.s32 = sign_extend(raw_value, entry->bit_length);
+        lsc_set(entry_hal->value.s32, sign_extend(raw_value, entry->bit_length));
         break;
     case LSC_HAL_FLOAT:
         if (entry->raw_signed) {
-            *entry_hal->value.real =
-                (lsc_float_t)sign_extend(raw_value, entry->bit_length) / entry->scale +
-                entry->offset;
+            lsc_set(entry_hal->value.real,
+                (double)sign_extend(raw_value, entry->bit_length) / entry->scale +
+                entry->offset);
         } else {
-            *entry_hal->value.real = (lsc_float_t)raw_value / entry->scale + entry->offset;
+            lsc_set(entry_hal->value.real, (double)raw_value / entry->scale + entry->offset);
         }
         break;
     }
@@ -2095,17 +2095,17 @@ static int encode_entry(const lsc_entry_config_t *entry,
 
     switch (entry->hal_type) {
     case LSC_HAL_BIT:
-        raw_value = *entry_hal->value.bit != 0 ? 1U : 0U;
+        raw_value = lsc_get(entry_hal->value.bit) != 0 ? 1U : 0U;
         break;
     case LSC_HAL_U32:
-        raw_value = *entry_hal->value.u32;
+        raw_value = lsc_get(entry_hal->value.u32);
         if ((raw_value & ~bit_mask(entry->bit_length)) != 0U) {
             errno = ERANGE;
             return -1;
         }
         break;
     case LSC_HAL_S32:
-        signed_value = *entry_hal->value.s32;
+        signed_value = lsc_get(entry_hal->value.s32);
         minimum = entry->bit_length == 32U ? INT32_MIN
                                            : -((int64_t)1 << (entry->bit_length - 1U));
         maximum = entry->bit_length == 32U ? INT32_MAX
@@ -2118,7 +2118,7 @@ static int encode_entry(const lsc_entry_config_t *entry,
         break;
     case LSC_HAL_FLOAT:
         if (entry->raw_signed) {
-            double scaled_value = (*entry_hal->value.real - entry->offset) * entry->scale;
+            double scaled_value = (lsc_get(entry_hal->value.real) - entry->offset) * entry->scale;
             minimum = entry->bit_length == 32U ? INT32_MIN
                                                : -((int64_t)1 << (entry->bit_length - 1U));
             maximum = entry->bit_length == 32U ? INT32_MAX
@@ -2131,7 +2131,7 @@ static int encode_entry(const lsc_entry_config_t *entry,
             signed_value = llround(scaled_value);
             raw_value = (uint32_t)signed_value & bit_mask(entry->bit_length);
         } else {
-            double scaled_value = (*entry_hal->value.real - entry->offset) * entry->scale;
+            double scaled_value = (lsc_get(entry_hal->value.real) - entry->offset) * entry->scale;
             if (!isfinite(scaled_value) || scaled_value < 0.0 ||
                 scaled_value > (double)bit_mask(entry->bit_length)) {
                 errno = ERANGE;
@@ -2152,8 +2152,8 @@ static int encode_entry(const lsc_entry_config_t *entry,
 
 static void record_global_error(lsc_hal_t *hal_data, int error_number)
 {
-    *hal_data->last_error = (lsc_s32_t)error_number;
-    *hal_data->error_count += 1U;
+    lsc_set(hal_data->last_error, (int)error_number);
+    lsc_set(hal_data->error_count, lsc_get(hal_data->error_count) + 1U);
 }
 
 static void process_tpdo(const lsc_pdo_config_t *pdo,
@@ -2163,7 +2163,7 @@ static void process_tpdo(const lsc_pdo_config_t *pdo,
     unsigned int entry_index;
 
     if (frame->len < pdo->data_length) {
-        *pdo_hal->last_error = EMSGSIZE;
+        lsc_set(pdo_hal->last_error, EMSGSIZE);
         return;
     }
 
@@ -2176,8 +2176,8 @@ static void process_tpdo(const lsc_pdo_config_t *pdo,
                      &pdo_hal->entries[entry_index]);
     }
 
-    *pdo_hal->rx_count += 1U;
-    *pdo_hal->last_error = 0;
+    lsc_set(pdo_hal->rx_count, lsc_get(pdo_hal->rx_count) + 1U);
+    lsc_set(pdo_hal->last_error, 0);
 }
 
 static void process_received_frame(const lsc_config_t *config,
@@ -2189,12 +2189,12 @@ static void process_received_frame(const lsc_config_t *config,
     unsigned int node_index;
 
     if ((frame->can_id & CAN_ERR_FLAG) != 0U) {
-        *hal_data->error_count += 1U;
+        lsc_set(hal_data->error_count, lsc_get(hal_data->error_count) + 1U);
         if ((frame->can_id & CAN_ERR_BUSOFF) != 0U) {
-            *hal_data->bus_off = 1;
+            lsc_set(hal_data->bus_off, 1);
         }
         if ((frame->can_id & CAN_ERR_RESTARTED) != 0U) {
-            *hal_data->bus_off = 0;
+            lsc_set(hal_data->bus_off, 0);
         }
         return;
     }
@@ -2209,10 +2209,10 @@ static void process_received_frame(const lsc_config_t *config,
         unsigned int pdo_index;
 
         if (can_id == (uint16_t)(0x700U + node->node_id) && frame->len >= 1U) {
-            *node_hal->nmt_state = frame->data[0];
-            *node_hal->operational = frame->data[0] == 0x05U;
-            *node_hal->online = 1;
-            *node_hal->heartbeat_age_ms = 0U;
+            lsc_set(node_hal->nmt_state, frame->data[0]);
+            lsc_set(node_hal->operational, frame->data[0] == 0x05U);
+            lsc_set(node_hal->online, 1);
+            lsc_set(node_hal->heartbeat_age_ms, 0U);
             node_hal->last_heartbeat_us = now_us;
             return;
         }
@@ -2223,9 +2223,9 @@ static void process_received_frame(const lsc_config_t *config,
             if (tpdo->defined && can_id == tpdo->cob_id) {
                 process_tpdo(tpdo, &node_hal->tpdos[pdo_index], frame);
                 if (node->heartbeat_timeout_ms == 0U) {
-                    *node_hal->online = 1;
+                    lsc_set(node_hal->online, 1);
                 }
-                *hal_data->bus_off = 0;
+                lsc_set(hal_data->bus_off, 0);
                 return;
             }
         }
@@ -2280,18 +2280,18 @@ static int send_rpdo(int socket_fd,
         if (encode_entry(&pdo->entries[entry_index],
                          &pdo_hal->entries[entry_index],
                          frame.data) != 0) {
-            *pdo_hal->last_error = errno;
+            lsc_set(pdo_hal->last_error, errno);
             return -1;
         }
     }
 
     if (write_can_frame(socket_fd, &frame, LSC_PDO_WRITE_TIMEOUT_MS) != 0) {
-        *pdo_hal->last_error = errno;
+        lsc_set(pdo_hal->last_error, errno);
         return -1;
     }
 
-    *pdo_hal->tx_count += 1U;
-    *pdo_hal->last_error = 0;
+    lsc_set(pdo_hal->tx_count, lsc_get(pdo_hal->tx_count) + 1U);
+    lsc_set(pdo_hal->last_error, 0);
     return 0;
 }
 
@@ -2314,15 +2314,15 @@ static void prepare_configured_network(const lsc_config_t *config,
         unsigned int pdo_index;
 
         node_hal->last_heartbeat_us = 0U;
-        *node_hal->heartbeat_age_ms = UINT32_MAX;
+        lsc_set(node_hal->heartbeat_age_ms, UINT32_MAX);
         if (node->heartbeat_timeout_ms == 0U) {
-            *node_hal->online = 1;
-            *node_hal->operational = node->start_node;
-            *node_hal->nmt_state = node->start_node ? 0x05U : 0x7FU;
+            lsc_set(node_hal->online, 1);
+            lsc_set(node_hal->operational, node->start_node);
+            lsc_set(node_hal->nmt_state, node->start_node ? 0x05U : 0x7FU);
         } else {
-            *node_hal->online = 0;
-            *node_hal->operational = 0;
-            *node_hal->nmt_state = 0U;
+            lsc_set(node_hal->online, 0);
+            lsc_set(node_hal->operational, 0);
+            lsc_set(node_hal->nmt_state, 0U);
         }
 
         for (pdo_index = 0U; pdo_index < LSC_MAX_PDOS; ++pdo_index) {
@@ -2332,7 +2332,7 @@ static void prepare_configured_network(const lsc_config_t *config,
             if (!pdo->defined) {
                 continue;
             }
-            pdo_hal->previous_send = *pdo_hal->send != 0;
+            pdo_hal->previous_send = lsc_get(pdo_hal->send) != 0;
             pdo_hal->periodic_started = pdo->auto_start;
             pdo_hal->next_due_us =
                 pdo->period_ms > 0U ? now_us + (uint64_t)pdo->period_ms * 1000U : 0U;
@@ -2348,16 +2348,16 @@ static void mark_network_down(int *socket_fd,
 
     if (*socket_fd >= 0) {
         close(*socket_fd);
-        *socket_fd = -1;
+        lsc_set(socket_fd, -1);
     }
 
-    *hal_data->connected = 0;
-    *hal_data->config_ok = 0;
+    lsc_set(hal_data->connected, 0);
+    lsc_set(hal_data->config_ok, 0);
     for (node_index = 0U; node_index < config->node_count; ++node_index) {
         lsc_node_hal_t *node_hal = &hal_data->nodes[node_index];
-        *node_hal->online = 0;
-        *node_hal->operational = 0;
-        *node_hal->config_ok = 0;
+        lsc_set(node_hal->online, 0);
+        lsc_set(node_hal->operational, 0);
+        lsc_set(node_hal->config_ok, 0);
     }
 }
 
@@ -2384,7 +2384,7 @@ static int process_rpdo_transmissions(int socket_fd,
                 continue;
             }
 
-            trigger = *pdo_hal->send != 0;
+            trigger = lsc_get(pdo_hal->send) != 0;
             send_requested = trigger && !pdo_hal->previous_send;
             if (send_requested) {
                 pdo_hal->periodic_started = true;
@@ -2394,7 +2394,7 @@ static int process_rpdo_transmissions(int socket_fd,
                            now_us >= pdo_hal->next_due_us;
             pdo_hal->previous_send = trigger;
 
-            if (*node_hal->enable == 0 || *node_hal->config_ok == 0 ||
+            if (lsc_get(node_hal->enable) == 0 || lsc_get(node_hal->config_ok) == 0 ||
                 (!send_requested && !periodic_due)) {
                 continue;
             }
@@ -2424,7 +2424,7 @@ static int send_sync(int socket_fd, lsc_hal_t *hal_data)
         return -1;
     }
 
-    *hal_data->sync_count += 1U;
+    lsc_set(hal_data->sync_count, lsc_get(hal_data->sync_count) + 1U);
     return 0;
 }
 
@@ -2443,18 +2443,18 @@ static void update_heartbeat_status(const lsc_config_t *config,
             continue;
         }
         if (node_hal->last_heartbeat_us == 0U) {
-            *node_hal->heartbeat_age_ms = UINT32_MAX;
-            *node_hal->online = 0;
-            *node_hal->operational = 0;
+            lsc_set(node_hal->heartbeat_age_ms, UINT32_MAX);
+            lsc_set(node_hal->online, 0);
+            lsc_set(node_hal->operational, 0);
             continue;
         }
 
         age_ms = (now_us - node_hal->last_heartbeat_us) / 1000U;
-        *node_hal->heartbeat_age_ms =
-            age_ms > UINT32_MAX ? UINT32_MAX : (lsc_u32_t)age_ms;
+        lsc_set(node_hal->heartbeat_age_ms,
+            age_ms > UINT32_MAX ? UINT32_MAX : (uint32_t)age_ms);
         if (age_ms > node->heartbeat_timeout_ms) {
-            *node_hal->online = 0;
-            *node_hal->operational = 0;
+            lsc_set(node_hal->online, 0);
+            lsc_set(node_hal->operational, 0);
         }
     }
 }
@@ -2474,15 +2474,15 @@ static void run_loop(const lsc_config_t *config, lsc_hal_t *hal_data)
                 record_global_error(hal_data, errno);
                 reconnect_after_us = now_us + (uint64_t)LSC_RECONNECT_DELAY_MS * 1000U;
             } else {
-                *hal_data->connected = 1;
-                *hal_data->bus_off = 0;
+                lsc_set(hal_data->connected, 1);
+                lsc_set(hal_data->bus_off, 0);
                 if (configure_network(socket_fd, config, hal_data) != 0) {
                     record_global_error(hal_data, errno);
                     mark_network_down(&socket_fd, config, hal_data);
                     reconnect_after_us = now_us +
                                          (uint64_t)LSC_RECONNECT_DELAY_MS * 1000U;
                 } else {
-                    *hal_data->last_error = 0;
+                    lsc_set(hal_data->last_error, 0);
                     prepare_configured_network(config, hal_data, now_us);
                     next_sync_us = config->sync_period_us > 0U
                                        ? now_us + config->sync_period_us

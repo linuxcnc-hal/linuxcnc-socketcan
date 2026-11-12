@@ -27,29 +27,29 @@
 #define MAX_FRAMES_PER_CYCLE 256U
 
 typedef struct {
-    lsc_bit_t *enable;
-    lsc_bit_t *connected;
-    lsc_bit_t *bus_off;
-    lsc_u32_t *error_count;
-    lsc_s32_t *last_error;
-    lsc_u32_t *last_can_error;
+    lsc_bit_t enable;
+    lsc_bit_t connected;
+    lsc_bit_t bus_off;
+    lsc_u32_t error_count;
+    lsc_s32_t last_error;
+    lsc_u32_t last_can_error;
 
-    lsc_bit_t *tx_trigger;
-    lsc_u32_t *tx_id;
-    lsc_bit_t *tx_extended;
-    lsc_bit_t *tx_rtr;
-    lsc_u32_t *tx_length;
-    lsc_u32_t *tx_data[CAN_MAX_DLEN];
-    lsc_u32_t *tx_count;
+    lsc_bit_t tx_trigger;
+    lsc_u32_t tx_id;
+    lsc_bit_t tx_extended;
+    lsc_bit_t tx_rtr;
+    lsc_u32_t tx_length;
+    lsc_u32_t tx_data[CAN_MAX_DLEN];
+    lsc_u32_t tx_count;
 
-    lsc_bit_t *rx_new;
-    lsc_u32_t *rx_sequence;
-    lsc_u32_t *rx_id;
-    lsc_bit_t *rx_extended;
-    lsc_bit_t *rx_rtr;
-    lsc_u32_t *rx_length;
-    lsc_u32_t *rx_data[CAN_MAX_DLEN];
-    lsc_u32_t *rx_count;
+    lsc_bit_t rx_new;
+    lsc_u32_t rx_sequence;
+    lsc_u32_t rx_id;
+    lsc_bit_t rx_extended;
+    lsc_bit_t rx_rtr;
+    lsc_u32_t rx_length;
+    lsc_u32_t rx_data[CAN_MAX_DLEN];
+    lsc_u32_t rx_count;
 } lsc_pins_t;
 
 typedef struct {
@@ -231,29 +231,29 @@ static void initialize_pins(lsc_pins_t *pins)
 {
     unsigned int index;
 
-    *pins->enable = 1;
-    *pins->connected = 0;
-    *pins->bus_off = 0;
-    *pins->error_count = 0U;
-    *pins->last_error = 0;
-    *pins->last_can_error = 0U;
-    *pins->tx_trigger = 0;
-    *pins->tx_id = 0U;
-    *pins->tx_extended = 0;
-    *pins->tx_rtr = 0;
-    *pins->tx_length = 0U;
-    *pins->tx_count = 0U;
-    *pins->rx_new = 0;
-    *pins->rx_sequence = 0U;
-    *pins->rx_id = 0U;
-    *pins->rx_extended = 0;
-    *pins->rx_rtr = 0;
-    *pins->rx_length = 0U;
-    *pins->rx_count = 0U;
+    lsc_set(pins->enable, 1);
+    lsc_set(pins->connected, 0);
+    lsc_set(pins->bus_off, 0);
+    lsc_set(pins->error_count, 0U);
+    lsc_set(pins->last_error, 0);
+    lsc_set(pins->last_can_error, 0U);
+    lsc_set(pins->tx_trigger, 0);
+    lsc_set(pins->tx_id, 0U);
+    lsc_set(pins->tx_extended, 0);
+    lsc_set(pins->tx_rtr, 0);
+    lsc_set(pins->tx_length, 0U);
+    lsc_set(pins->tx_count, 0U);
+    lsc_set(pins->rx_new, 0);
+    lsc_set(pins->rx_sequence, 0U);
+    lsc_set(pins->rx_id, 0U);
+    lsc_set(pins->rx_extended, 0);
+    lsc_set(pins->rx_rtr, 0);
+    lsc_set(pins->rx_length, 0U);
+    lsc_set(pins->rx_count, 0U);
 
     for (index = 0U; index < CAN_MAX_DLEN; ++index) {
-        *pins->tx_data[index] = 0U;
-        *pins->rx_data[index] = 0U;
+        lsc_set(pins->tx_data[index], 0U);
+        lsc_set(pins->rx_data[index], 0U);
     }
 }
 
@@ -321,8 +321,8 @@ static int open_can_socket(const char *interface_name)
 
 static void record_system_error(lsc_pins_t *pins, int error_number)
 {
-    *pins->last_error = (lsc_s32_t)error_number;
-    *pins->error_count += 1U;
+    lsc_set(pins->last_error, error_number);
+    lsc_set(pins->error_count, lsc_get(pins->error_count) + 1U);
 }
 
 static void disconnect_socket(int *socket_fd, lsc_pins_t *pins)
@@ -332,7 +332,7 @@ static void disconnect_socket(int *socket_fd, lsc_pins_t *pins)
         *socket_fd = -1;
     }
 
-    *pins->connected = 0;
+    lsc_set(pins->connected, 0);
 }
 
 static bool error_requires_reconnect(int error_number)
@@ -347,31 +347,31 @@ static void process_received_frame(const struct can_frame *frame, lsc_pins_t *pi
     unsigned int index;
 
     if ((frame->can_id & CAN_ERR_FLAG) != 0U) {
-        *pins->last_can_error = frame->can_id & CAN_ERR_MASK;
-        *pins->error_count += 1U;
+        lsc_set(pins->last_can_error, frame->can_id & CAN_ERR_MASK);
+        lsc_set(pins->error_count, lsc_get(pins->error_count) + 1U);
         if ((frame->can_id & CAN_ERR_BUSOFF) != 0U) {
-            *pins->bus_off = 1;
+            lsc_set(pins->bus_off, 1);
         }
         if ((frame->can_id & CAN_ERR_RESTARTED) != 0U) {
-            *pins->bus_off = 0;
+            lsc_set(pins->bus_off, 0);
         }
         return;
     }
 
     is_extended = (frame->can_id & CAN_EFF_FLAG) != 0U;
-    *pins->rx_id = frame->can_id & (is_extended ? CAN_EFF_MASK : CAN_SFF_MASK);
-    *pins->rx_extended = is_extended;
-    *pins->rx_rtr = (frame->can_id & CAN_RTR_FLAG) != 0U;
-    *pins->rx_length = frame->len;
-    *pins->bus_off = 0;
+    lsc_set(pins->rx_id, frame->can_id & (is_extended ? CAN_EFF_MASK : CAN_SFF_MASK));
+    lsc_set(pins->rx_extended, is_extended);
+    lsc_set(pins->rx_rtr, (frame->can_id & CAN_RTR_FLAG) != 0U);
+    lsc_set(pins->rx_length, frame->len);
+    lsc_set(pins->bus_off, 0);
 
     for (index = 0U; index < CAN_MAX_DLEN; ++index) {
-        *pins->rx_data[index] = index < frame->len ? frame->data[index] : 0U;
+        lsc_set(pins->rx_data[index], index < frame->len ? frame->data[index] : 0U);
     }
 
-    *pins->rx_count += 1U;
-    *pins->rx_sequence += 1U;
-    *pins->rx_new = !*pins->rx_new;
+    lsc_set(pins->rx_count, lsc_get(pins->rx_count) + 1U);
+    lsc_set(pins->rx_sequence, lsc_get(pins->rx_sequence) + 1U);
+    lsc_set(pins->rx_new, !lsc_get(pins->rx_new));
 }
 
 static int receive_frames(int socket_fd, lsc_pins_t *pins)
@@ -406,9 +406,9 @@ static int receive_frames(int socket_fd, lsc_pins_t *pins)
 
 static int build_transmit_frame(const lsc_pins_t *pins, struct can_frame *frame)
 {
-    bool is_extended = *pins->tx_extended != 0;
-    lsc_u32_t identifier = *pins->tx_id;
-    lsc_u32_t length = *pins->tx_length;
+    bool is_extended = lsc_get(pins->tx_extended) != 0;
+    uint32_t identifier = lsc_get(pins->tx_id);
+    uint32_t length = lsc_get(pins->tx_length);
     unsigned int index;
 
     if (length > CAN_MAX_DLEN) {
@@ -426,17 +426,17 @@ static int build_transmit_frame(const lsc_pins_t *pins, struct can_frame *frame)
     if (is_extended) {
         frame->can_id |= CAN_EFF_FLAG;
     }
-    if (*pins->tx_rtr != 0) {
+    if (lsc_get(pins->tx_rtr) != 0) {
         frame->can_id |= CAN_RTR_FLAG;
     }
     frame->len = (uint8_t)length;
 
     for (index = 0U; index < length; ++index) {
-        if (*pins->tx_data[index] > UINT8_MAX) {
+        if (lsc_get(pins->tx_data[index]) > UINT8_MAX) {
             errno = EINVAL;
             return -1;
         }
-        frame->data[index] = (uint8_t)*pins->tx_data[index];
+        frame->data[index] = (uint8_t)lsc_get(pins->tx_data[index]);
     }
 
     return 0;
@@ -459,8 +459,8 @@ static int transmit_frame(int socket_fd, lsc_pins_t *pins)
         return -1;
     }
 
-    *pins->tx_count += 1U;
-    *pins->last_error = 0;
+    lsc_set(pins->tx_count, lsc_get(pins->tx_count) + 1U);
+    lsc_set(pins->last_error, 0);
     return 0;
 }
 
@@ -482,12 +482,12 @@ static void run_loop(const lsc_options_t *options, lsc_pins_t *pins)
     int socket_fd = -1;
 
     while (!stop_requested) {
-        bool trigger = *pins->tx_trigger != 0;
+        bool trigger = lsc_get(pins->tx_trigger) != 0;
         uint64_t now = monotonic_milliseconds();
 
-        if (*pins->enable == 0) {
+        if (lsc_get(pins->enable) == 0) {
             disconnect_socket(&socket_fd, pins);
-            *pins->bus_off = 0;
+            lsc_set(pins->bus_off, 0);
             reconnect_after = 0U;
         } else {
             if (socket_fd < 0 && now >= reconnect_after) {
@@ -496,9 +496,9 @@ static void run_loop(const lsc_options_t *options, lsc_pins_t *pins)
                     record_system_error(pins, errno);
                     reconnect_after = now + RECONNECT_DELAY_MS;
                 } else {
-                    *pins->connected = 1;
-                    *pins->bus_off = 0;
-                    *pins->last_error = 0;
+                    lsc_set(pins->connected, 1);
+                    lsc_set(pins->bus_off, 0);
+                    lsc_set(pins->last_error, 0);
                 }
             }
 

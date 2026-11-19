@@ -19,7 +19,40 @@ Command-line overrides are available:
 --interface NAME   override the XML interface
 --period-us USEC   override the XML polling period
 --name NAME        HAL component prefix, default lsc_canopen
+--rt-priority N    SCHED_FIFO priority 1..99, 0 = off, default 80
+--cpu N            pin the cyclic loop to CPU N, default no pinning
 ```
+
+## Cycle timing
+
+The loop runs on a fixed absolute grid of `periodUs` (`clock_nanosleep` with
+`TIMER_ABSTIME`), so work time and wake-up latency do not add up into drift.
+Periodic RPDOs (`periodMs`) and SYNC (`syncPeriodUs`) are scheduled from that
+grid. At startup the component calls `mlockall()` and switches to `SCHED_FIFO`.
+If that fails (not root, no rtprio limit) it prints a warning and keeps running
+without real-time scheduling. Cyclic frames never block: when the SocketCAN TX
+queue is full the frame is dropped and recorded in `last-error`.
+
+For deterministic 1 ms timing use a PREEMPT_RT kernel, run with real-time
+permission (`ulimit -r 99`, or a `@group - rtprio 99` line in
+`/etc/security/limits.conf`) and pin to an isolated CPU (`isolcpus=N`,
+`--cpu N`). The component is still userspace, so it is not phase-locked to
+LinuxCNC's `servo-thread`.
+
+Timing diagnostic pins:
+
+| Pin | Type | Dir | Meaning |
+|---|---|---|---|
+| `cycle-count` | u32 | out | cycles executed |
+| `overrun-count` | u32 | out | cycles missed; the grid realigns instead of bursting |
+| `latency-us` | s32 | out | wake-up delay after the scheduled tick |
+| `max-latency-us` | s32 | out | worst wake-up delay |
+| `exec-us` | s32 | out | time spent in the last cycle |
+| `max-exec-us` | s32 | out | worst cycle time |
+| `reset-stats` | bit | in | clears `overrun-count` and the maximum values |
+
+Overruns during connection and SDO configuration are expected. Pulse
+`reset-stats` once the network is operational.
 
 ## `configPdos`
 

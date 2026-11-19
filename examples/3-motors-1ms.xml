@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<socketcan interface="can0"
+           periodUs="1000"
+           syncPeriodUs="0"
+           sdoTimeoutMs="500">
+  <node name="motor-1" id="1" configPdos="false" startNode="false" heartbeatTimeoutMs="0">
+
+    <!--TX PDOs-->
+    <!--0x281 (DLC = 7), little-endian, packed in declaration order:
+          byte 0..3 : actual-position, signed 32-bit integer (byte 0 = LSB, byte 3 = MSB)
+                      HAL pin is float, value = raw * scale (scale = 1)
+          byte 4    : actual-current, 8-bit
+          byte 5    : status-flags bits 0..7 (low byte)
+                        bit0 (mask 0x01) = enable
+                        bit1 (mask 0x02) = fault
+                        bit2 (mask 0x04) = emergency
+                        bit3 (mask 0x08) = home
+                        bit4 (mask 0x10) = lim-cw
+                        bit5 (mask 0x20) = lim-ccw
+                        bit6 (mask 0x40) = homing
+                        bit7 (mask 0x80) = homed
+          byte 6    : status-flags bits 8..15 (high byte)
+                        bit8 (mask 0x01) = brake
+                        bit9 (mask 0x02) = out-dig
+        Example:
+          position = 1000, current = 5, enable + homed + brake :
+            281#E8 03 00 00 05 81 01
+    -->
+    <tpdo number="1" cobId="0x281" transmissionType="255">
+        <pdoEntry name="actual-position" index="0x2100" subIdx="0" bitLen="32" halType="float" signed="true" scale="1"/>
+        <pdoEntry name="actual-current" index="0x2101" subIdx="0" bitLen="8" halType="s32"/>
+        <complexEntry name="status-flags"
+                    index="0x2102"
+                    subIdx="0"
+                    bitLen="16"
+                    halType="u32"
+                    bit0="enable"
+                    bit1="fault"
+                    bit2="emergency"
+                    bit3="home"
+                    bit4="lim-cw"
+                    bit5="lim-ccw"
+                    bit6="homing"
+                    bit7="homed"
+                    bit8="brake"
+                    bit9="out-dig"/>
+    </tpdo>
+  </node>
+
+  <node name="motor-2" id="2" configPdos="false" startNode="false" heartbeatTimeoutMs="0">
+    <tpdo number="1" cobId="0x282" transmissionType="255">
+        <pdoEntry name="actual-position" index="0x2100" subIdx="0" bitLen="32" halType="float" signed="true" scale="1"/>
+        <pdoEntry name="actual-current" index="0x2101" subIdx="0" bitLen="8" halType="s32"/>
+        <complexEntry name="status-flags"
+                    index="0x2102"
+                    subIdx="0"
+                    bitLen="16"
+                    halType="u32"
+                    bit0="enable"
+                    bit1="fault"
+                    bit2="emergency"
+                    bit3="home"
+                    bit4="lim-cw"
+                    bit5="lim-ccw"
+                    bit6="homing"
+                    bit7="homed"
+                    bit8="brake"
+                    bit9="out-dig"/>
+    </tpdo>
+  </node>
+
+    <node name="motor-3" id="3" configPdos="false" startNode="false" heartbeatTimeoutMs="0">
+    <tpdo number="1" cobId="0x283" transmissionType="255">
+        <pdoEntry name="actual-position" index="0x2100" subIdx="0" bitLen="32" halType="float" signed="true" scale="1"/>
+        <pdoEntry name="actual-current" index="0x2101" subIdx="0" bitLen="8" halType="s32"/>
+        <complexEntry name="status-flags"
+                    index="0x2102"
+                    subIdx="0"
+                    bitLen="16"
+                    halType="u32"
+                    bit0="enable"
+                    bit1="fault"
+                    bit2="emergency"
+                    bit3="home"
+                    bit4="lim-cw"
+                    bit5="lim-ccw"
+                    bit6="homing"
+                    bit7="homed"
+                    bit8="brake"
+                    bit9="out-dig"/>
+    </tpdo>
+  </node>
+  <!--0x203 (DLC = 6), little-endian, packed in declaration order:
+        byte 0..3 : unused (32-bit padding)
+        byte 4    : request-enable bits 0..7 (low byte)
+                      bit0 (mask 0x01) = enable-motor-1
+                      bit5 (mask 0x20) = bitAlarmReset
+        byte 5    : request-enable bits 8..15 (high byte, unused = 0x00)
+      Examples:
+        enable only          : 203#00 00 00 00 01 00 00 00
+        enable + alarm reset : 203#00 00 00 00 21 00 00 00
+  -->
+ <node name="drive" id="4" configPdos="false" startNode="false" heartbeatTimeoutMs="0">
+
+  <rpdo number="1" cobId="0x203" transmissionType="255" periodMs="1">
+    <complexEntry bitLen="32"/>
+    <complexEntry name="request-enable" index="0x2011" subIdx="0" bitLen="16" halType="u32"
+                  bit0="enable-motor-1"
+                  bit1="enable-motor-2"
+                  bit2="enable-motor-3"
+                  bit5="bitAlarmReset"/>
+    <complexEntry bitLen="16"/>
+
+  </rpdo>
+
+  <!-- 0x201 (DLC 8): bytes 0..3 = ID1 target, bytes 4..7 = ID2 target -->
+  <rpdo number="2" cobId="0x201" transmissionType="255" periodMs="1">
+    <pdoEntry name="target-position-1" index="0x2000" subIdx="1" bitLen="32" halType="float" signed="true" scale="1"/>
+    <pdoEntry name="target-position-2" index="0x2000" subIdx="2" bitLen="32" halType="float" signed="true" scale="1"/>
+  </rpdo>
+
+  <!-- 0x202 (DLC 8): bytes 0..3 = ID3 target, bytes 4..7 = ID4 target (unused → pad) -->
+  <rpdo number="3" cobId="0x202" transmissionType="255" periodMs="1">
+    <pdoEntry name="target-position-3" index="0x2000" subIdx="3" bitLen="32" halType="float" signed="true" scale="1"/>
+    <complexEntry bitLen="32"/>
+  </rpdo>
+</node>
+ 
+</socketcan>

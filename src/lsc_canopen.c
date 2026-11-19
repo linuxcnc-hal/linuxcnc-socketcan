@@ -1,3 +1,6 @@
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 #include <errno.h>
 #include <expat.h>
 #include <fcntl.h>
@@ -9,6 +12,7 @@
 #include <math.h>
 #include <net/if.h>
 #include <poll.h>
+#include <sched.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdarg.h>
@@ -18,6 +22,7 @@
 #include <string.h>
 #include <strings.h>
 #include <sys/ioctl.h>
+#include <sys/mman.h>
 #include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
@@ -39,7 +44,10 @@
 #define LSC_PATH_LEN 512U
 #define LSC_XML_BUFFER_SIZE 4096U
 #define LSC_MAX_RX_FRAMES 256U
-#define LSC_PDO_WRITE_TIMEOUT_MS 10U
+/* Cyclic frames (RPDO, SYNC) must never block the 1 ms loop: if the TX
+ * queue is full the frame is dropped and counted as an error instead. */
+#define LSC_PDO_WRITE_TIMEOUT_MS 0U
+#define LSC_DEFAULT_RT_PRIORITY 80
 
 typedef enum {
     LSC_PDO_NONE = 0,
@@ -161,6 +169,13 @@ typedef struct {
     lsc_u32_t error_count;
     lsc_s32_t last_error;
     lsc_u32_t sync_count;
+    lsc_u32_t cycle_count;
+    lsc_u32_t overrun_count;
+    lsc_s32_t latency_us;
+    lsc_s32_t max_latency_us;
+    lsc_s32_t exec_us;
+    lsc_s32_t max_exec_us;
+    lsc_bit_t reset_stats;
     lsc_node_hal_t nodes[LSC_MAX_NODES];
 } lsc_hal_t;
 
@@ -180,6 +195,8 @@ typedef struct {
     char component_name[HAL_NAME_LEN + 1];
     char interface_override[IFNAMSIZ];
     uint32_t period_override_us;
+    int rt_priority;
+    int cpu;
     bool has_interface_override;
     bool has_period_override;
 } lsc_options_t;
@@ -210,6 +227,56 @@ static void sleep_microseconds(uint32_t delay_us)
     delay.tv_sec = (time_t)(delay_us / 1000000U);
     delay.tv_nsec = (long)(delay_us % 1000000U) * 1000L;
     while (nanosleep(&delay, &delay) < 0 && errno == EINTR && !stop_requested) {
+    }
+}
+
+static void timespec_from_microseconds(uint64_t time_us, struct timespec *value)
+{
+    value->tv_sec = (time_t)(time_us / 1000000U);
+    value->tv_nsec = (long)(time_us % 1000000U) * 1000L;
+}
+
+/* Sleep until an absolute CLOCK_MONOTONIC time, so the cycle period does not
+ * depend on how long the work inside the cycle took. */
+static void sleep_until_microseconds(uint64_t deadline_us)
+{
+    struct timespec deadline;
+
+    timespec_from_microseconds(deadline_us, &deadline);
+    while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &deadline, NULL) == EINTR &&
+           !stop_requested) {
+    }
+}
+
+static void setup_realtime(int rt_priority, int cpu)
+{
+    if (mlockall(MCL_CURRENT | MCL_FUTURE) != 0) {
+        fprintf(stderr, "warning: mlockall failed: %s\n", strerror(errno));
+    }
+
+    if (cpu >= 0) {
+        cpu_set_t cpus;
+
+        CPU_ZERO(&cpus);
+        CPU_SET(cpu, &cpus);
+        if (sched_setaffinity(0, sizeof(cpus), &cpus) != 0) {
+            fprintf(stderr, "warning: cannot pin to CPU %d: %s\n", cpu, strerror(errno));
+        }
+    }
+
+    if (rt_priority > 0) {
+        struct sched_param parameters;
+
+        memset(&parameters, 0, sizeof(parameters));
+        parameters.sched_priority = rt_priority;
+        if (sched_setscheduler(0, SCHED_FIFO, &parameters) != 0) {
+            fprintf(stderr,
+                    "warning: SCHED_FIFO priority %d failed: %s "
+                    "(run as root or raise the rtprio limit); "
+                    "timing will NOT be real-time\n",
+                    rt_priority,
+                    strerror(errno));
+        }
     }
 }
 
@@ -1116,9 +1183,12 @@ static void print_usage(const char *program_name)
             "  -i, --interface NAME   override XML SocketCAN interface\n"
             "  -p, --period-us USEC   override XML polling period\n"
             "  -n, --name NAME        HAL component prefix (default: %s)\n"
+            "  -r, --rt-priority N    SCHED_FIFO priority 1..99, 0 = off (default: %d)\n"
+            "  -C, --cpu N            pin the cyclic loop to CPU N (default: no pinning)\n"
             "  -h, --help             show this help\n",
             program_name,
-            LSC_DEFAULT_COMPONENT);
+            LSC_DEFAULT_COMPONENT,
+            LSC_DEFAULT_RT_PRIORITY);
 }
 
 static int parse_options(int argc, char **argv, lsc_options_t *options)
@@ -1128,6 +1198,8 @@ static int parse_options(int argc, char **argv, lsc_options_t *options)
         {"interface", required_argument, NULL, 'i'},
         {"period-us", required_argument, NULL, 'p'},
         {"name", required_argument, NULL, 'n'},
+        {"rt-priority", required_argument, NULL, 'r'},
+        {"cpu", required_argument, NULL, 'C'},
         {"help", no_argument, NULL, 'h'},
         {NULL, 0, NULL, 0},
     };
@@ -1135,13 +1207,15 @@ static int parse_options(int argc, char **argv, lsc_options_t *options)
     int option;
 
     memset(options, 0, sizeof(*options));
+    options->rt_priority = LSC_DEFAULT_RT_PRIORITY;
+    options->cpu = -1;
     if (copy_text(options->component_name,
                   sizeof(options->component_name),
                   LSC_DEFAULT_COMPONENT) != 0) {
         return -1;
     }
 
-    while ((option = getopt_long(argc, argv, "c:i:p:n:h", long_options, NULL)) != -1) {
+    while ((option = getopt_long(argc, argv, "c:i:p:n:r:C:h", long_options, NULL)) != -1) {
         switch (option) {
         case 'c':
             if (copy_text(options->config_file, sizeof(options->config_file), optarg) != 0) {
@@ -1173,6 +1247,20 @@ static int parse_options(int argc, char **argv, lsc_options_t *options)
                 fprintf(stderr, "invalid HAL component name\n");
                 return -1;
             }
+            break;
+        case 'r':
+            if (parse_unsigned(optarg, 0U, 99U, &value) != 0) {
+                fprintf(stderr, "invalid real-time priority\n");
+                return -1;
+            }
+            options->rt_priority = (int)value;
+            break;
+        case 'C':
+            if (parse_unsigned(optarg, 0U, (uint32_t)CPU_SETSIZE - 1U, &value) != 0) {
+                fprintf(stderr, "invalid CPU number\n");
+                return -1;
+            }
+            options->cpu = (int)value;
             break;
         case 'h':
             print_usage(argv[0]);
@@ -1758,6 +1846,27 @@ static int export_hal_pins(int component_id,
                               "%s.sync-count",
                               component_name);
     if (result < 0) return result;
+    result = lsc_pin_u32_newf(HAL_OUT, &hal_data->cycle_count, component_id,
+                              "%s.cycle-count", component_name);
+    if (result < 0) return result;
+    result = lsc_pin_u32_newf(HAL_OUT, &hal_data->overrun_count, component_id,
+                              "%s.overrun-count", component_name);
+    if (result < 0) return result;
+    result = lsc_pin_s32_newf(HAL_OUT, &hal_data->latency_us, component_id,
+                              "%s.latency-us", component_name);
+    if (result < 0) return result;
+    result = lsc_pin_s32_newf(HAL_OUT, &hal_data->max_latency_us, component_id,
+                              "%s.max-latency-us", component_name);
+    if (result < 0) return result;
+    result = lsc_pin_s32_newf(HAL_OUT, &hal_data->exec_us, component_id,
+                              "%s.exec-us", component_name);
+    if (result < 0) return result;
+    result = lsc_pin_s32_newf(HAL_OUT, &hal_data->max_exec_us, component_id,
+                              "%s.max-exec-us", component_name);
+    if (result < 0) return result;
+    result = lsc_pin_bit_newf(HAL_IN, &hal_data->reset_stats, component_id,
+                              "%s.reset-stats", component_name);
+    if (result < 0) return result;
 
     for (node_index = 0U; node_index < config->node_count; ++node_index) {
         const lsc_node_config_t *node = &config->nodes[node_index];
@@ -1932,6 +2041,13 @@ static void initialize_hal_pins(const lsc_config_t *config, lsc_hal_t *hal_data)
     lsc_set(hal_data->error_count, 0U);
     lsc_set(hal_data->last_error, 0);
     lsc_set(hal_data->sync_count, 0U);
+    lsc_set(hal_data->cycle_count, 0U);
+    lsc_set(hal_data->overrun_count, 0U);
+    lsc_set(hal_data->latency_us, 0);
+    lsc_set(hal_data->max_latency_us, 0);
+    lsc_set(hal_data->exec_us, 0);
+    lsc_set(hal_data->max_exec_us, 0);
+    lsc_set(hal_data->reset_stats, 0);
 
     for (node_index = 0U; node_index < config->node_count; ++node_index) {
         const lsc_node_config_t *node = &config->nodes[node_index];
@@ -2408,7 +2524,14 @@ static int process_rpdo_transmissions(int socket_fd,
             }
 
             if (periodic_due) {
-                pdo_hal->next_due_us = now_us + (uint64_t)pdo->period_ms * 1000U;
+                /* Advance from the previous due time (not from "now") so the
+                 * frame stays locked to the cycle grid and never drifts. */
+                uint64_t pdo_period_us = (uint64_t)pdo->period_ms * 1000U;
+
+                pdo_hal->next_due_us += pdo_period_us;
+                if (pdo_hal->next_due_us <= now_us) {
+                    pdo_hal->next_due_us = now_us + pdo_period_us;
+                }
             } else if (send_requested && pdo->period_ms > 0U) {
                 pdo_hal->next_due_us = now_us + (uint64_t)pdo->period_ms * 1000U;
             }
@@ -2463,10 +2586,37 @@ static void run_loop(const lsc_config_t *config, lsc_hal_t *hal_data)
 {
     uint64_t reconnect_after_us = 0U;
     uint64_t next_sync_us = 0U;
+    uint64_t period_us = config->period_us;
+    uint64_t next_cycle_us = monotonic_microseconds() + period_us;
     int socket_fd = -1;
 
     while (!stop_requested) {
-        uint64_t now_us = monotonic_microseconds();
+        uint64_t now_us;
+        uint64_t wake_us;
+        uint64_t done_us;
+        int64_t latency;
+        int64_t exec;
+
+        /* Fixed-rate cycle: wake on an absolute 1 ms grid. All periodic
+         * deadlines are computed from the grid time, not the wake-up time,
+         * so scheduling latency does not accumulate into drift. */
+        sleep_until_microseconds(next_cycle_us);
+        if (stop_requested) {
+            break;
+        }
+        wake_us = monotonic_microseconds();
+        now_us = next_cycle_us;
+        latency = (int64_t)(wake_us - next_cycle_us);
+
+        if (lsc_get(hal_data->reset_stats) != 0) {
+            lsc_set(hal_data->overrun_count, 0U);
+            lsc_set(hal_data->max_latency_us, 0);
+            lsc_set(hal_data->max_exec_us, 0);
+        }
+        lsc_set(hal_data->latency_us, (int32_t)latency);
+        if (latency > lsc_get(hal_data->max_latency_us)) {
+            lsc_set(hal_data->max_latency_us, (int32_t)latency);
+        }
 
         if (socket_fd < 0 && now_us >= reconnect_after_us) {
             socket_fd = open_can_socket(config->interface_name);
@@ -2503,19 +2653,48 @@ static void run_loop(const lsc_config_t *config, lsc_hal_t *hal_data)
                 mark_network_down(&socket_fd, config, hal_data);
                 reconnect_after_us = now_us + (uint64_t)LSC_RECONNECT_DELAY_MS * 1000U;
             } else if (config->sync_period_us > 0U && now_us >= next_sync_us) {
-                if (send_sync(socket_fd, hal_data) != 0) {
-                    record_global_error(hal_data, errno);
+                int sync_result = send_sync(socket_fd, hal_data);
+                int error_number = errno;
+
+                if (sync_result != 0) {
+                    record_global_error(hal_data, error_number);
+                }
+                if (sync_result != 0 && error_requires_reconnect(error_number)) {
                     mark_network_down(&socket_fd, config, hal_data);
                     reconnect_after_us = now_us +
                                          (uint64_t)LSC_RECONNECT_DELAY_MS * 1000U;
                 } else {
-                    next_sync_us = now_us + config->sync_period_us;
+                    /* A SYNC dropped because the TX queue was full is
+                     * skipped; the grid continues with the next one. */
+                    next_sync_us += config->sync_period_us;
+                    if (next_sync_us <= now_us) {
+                        next_sync_us = now_us + config->sync_period_us;
+                    }
                 }
             }
         }
 
         update_heartbeat_status(config, hal_data, now_us);
-        sleep_microseconds(config->period_us);
+
+        done_us = monotonic_microseconds();
+        exec = (int64_t)(done_us - wake_us);
+        lsc_set(hal_data->exec_us, (int32_t)exec);
+        if (exec > lsc_get(hal_data->max_exec_us)) {
+            lsc_set(hal_data->max_exec_us, (int32_t)exec);
+        }
+        lsc_set(hal_data->cycle_count, lsc_get(hal_data->cycle_count) + 1U);
+
+        next_cycle_us += period_us;
+        if (done_us >= next_cycle_us) {
+            /* Missed one or more cycles (e.g. a blocking reconnect/SDO
+             * configuration, or a latency spike): count it and re-align to
+             * the grid instead of firing a burst of catch-up cycles. */
+            uint64_t missed = (done_us - next_cycle_us) / period_us + 1U;
+
+            lsc_set(hal_data->overrun_count,
+                    lsc_get(hal_data->overrun_count) + (uint32_t)missed);
+            next_cycle_us += missed * period_us;
+        }
     }
 
     mark_network_down(&socket_fd, config, hal_data);
@@ -2551,6 +2730,7 @@ int main(int argc, char **argv)
 
     signal(SIGINT, handle_signal);
     signal(SIGTERM, handle_signal);
+    setup_realtime(options.rt_priority, options.cpu);
 
     component_id = hal_init(options.component_name);
     if (component_id < 0) {

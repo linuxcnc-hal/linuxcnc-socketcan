@@ -1,0 +1,29 @@
+# 3 motors on can0 @ 1 Mbit/s, 1 ms fixed-rate cycle (see 3-motors-1ms.xml)
+#
+#   --rt-priority 80 : SCHED_FIFO priority (needs root or an rtprio limit)
+#   --cpu 1          : pin the cyclic loop to an isolated CPU (isolcpus=1)
+loadusr -W lsc_canopen --config 3-motors-1ms.xml --rt-priority 80 --cpu 1
+
+# Feedback nodes (TPDOs 0x281..0x283), e.g.:
+#   lsc_canopen.motor-1.tpdo-1.actual-position
+#   lsc_canopen.motor-1.tpdo-1.actual-current
+#   lsc_canopen.motor-1.tpdo-1.fault / homed / brake ...
+
+# Command node (RPDOs 0x203, 0x201, 0x202, all every 1 ms).
+# autoStart defaults to true, so the RPDOs start as soon as enable is set.
+setp lsc_canopen.drive.rpdo-2.target-position-1 0
+setp lsc_canopen.drive.rpdo-2.target-position-2 0
+setp lsc_canopen.drive.rpdo-3.target-position-3 0
+setp lsc_canopen.drive.rpdo-1.enable-motor-1 true
+setp lsc_canopen.drive.rpdo-1.enable-motor-2 true
+setp lsc_canopen.drive.rpdo-1.enable-motor-3 true
+setp lsc_canopen.drive.rpdo-1.bitAlarmReset false
+setp lsc_canopen.drive.enable true
+
+# Timing diagnostics (watch with halshow / halcmd show pin lsc_canopen):
+#   lsc_canopen.cycle-count     cycles executed
+#   lsc_canopen.overrun-count   cycles missed (should stay 0 in operation)
+#   lsc_canopen.latency-us      wake-up delay after the 1 ms tick
+#   lsc_canopen.max-latency-us  worst wake-up delay
+#   lsc_canopen.exec-us / max-exec-us  time spent in one cycle
+#   lsc_canopen.reset-stats     set true to clear max/overrun values
